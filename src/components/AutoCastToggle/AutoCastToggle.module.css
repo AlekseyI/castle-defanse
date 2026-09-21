@@ -1,0 +1,43 @@
+.toggle {
+  grid-area: toggle;
+  display: flex;
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+  max-width: calc(100% - 16px);
+  margin: 2px 8px 4px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.88);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.covered {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.checkbox {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+@media (max-width: 600px), (max-height: 640px) {
+  .toggle {
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 9px;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .checkbox {
+    width: 15px;
+    height: 15px;
+  }
+}

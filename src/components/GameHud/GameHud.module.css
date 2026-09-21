@@ -1,0 +1,106 @@
+.root {
+  display: contents;
+}
+
+.header {
+  grid-area: header;
+  position: relative;
+  min-height: 58px;
+  padding: 10px 16px 6px;
+  color: #fff;
+  text-align: center;
+  background: #0b1020;
+}
+
+.wave {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.castle {
+  margin-top: 3px;
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 19px;
+}
+
+.coins {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  color: #ffe08a;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 20px;
+}
+
+.skills {
+  grid-area: skills;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 82px));
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #0b1020;
+}
+
+.skillButton {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  height: 54px;
+  padding: 0;
+  border: 2px solid;
+  border-radius: 13px;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.skillIcon {
+  justify-self: end;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.skillCount {
+  justify-self: center;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.covered .header,
+.covered .skills {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 600px), (max-height: 640px) {
+  .header {
+    min-height: 50px;
+    padding: 7px 10px 4px;
+  }
+
+  .castle {
+    margin-top: 1px;
+  }
+
+  .coins {
+    top: 9px;
+    right: 10px;
+  }
+
+  .skills {
+    gap: 6px;
+    padding: 4px 12px;
+  }
+
+  .skillButton {
+    height: 48px;
+    border-radius: 11px;
+  }
+}

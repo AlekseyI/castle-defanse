@@ -1,0 +1,23 @@
+.app {
+  display: contents;
+}
+
+.editorLink {
+  position: fixed;
+  z-index: 50;
+  top: 10px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #32415e;
+  border-radius: 9px;
+  color: #c7d5e9;
+  background: rgba(15, 24, 42, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+}

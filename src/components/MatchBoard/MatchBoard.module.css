@@ -1,0 +1,124 @@
+.wrap {
+  grid-area: board;
+  display: flex;
+  justify-content: center;
+  padding: 0 9px 10px;
+}
+
+.board {
+  --board-gap: clamp(3px, 0.65vw, 5px);
+  display: grid;
+  grid-template-columns: repeat(var(--board-size), 1fr);
+  width: min(calc(100vw - 18px), 38vh, max(108px, calc(100vh - 310px)));
+  width: min(calc(100vw - 18px), 38dvh, max(108px, calc(100dvh - 310px)));
+  aspect-ratio: 1;
+  gap: var(--board-gap);
+  touch-action: none;
+}
+
+.tile,
+.emptyCell {
+  min-width: 0;
+  min-height: 0;
+  border-radius: clamp(8px, 2vw, 14px);
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid;
+  color: #fff;
+  font: inherit;
+  font-size: clamp(18px, 6vw, 34px);
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  transform: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tile:disabled {
+  cursor: default;
+}
+
+.tile:active,
+.tile:focus,
+.tile:focus-visible,
+.selected {
+  transform: none;
+  border-width: 2px;
+  outline: none;
+}
+
+.swappingFrom,
+.swappingTo {
+  pointer-events: none;
+  will-change: transform;
+  animation: swapTile 150ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.swappingFrom {
+  z-index: 3;
+}
+
+.swappingTo {
+  z-index: 2;
+}
+
+.emptyCell {
+  border: 2px solid transparent;
+}
+
+@keyframes swapTile {
+  from {
+    transform: translate(0, 0);
+  }
+
+  to {
+    transform: translate(var(--swap-x), var(--swap-y));
+  }
+}
+
+.falling {
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: fallTile var(--fall-duration) cubic-bezier(0.18, 0.78, 0.22, 1) both;
+}
+
+@keyframes fallTile {
+  0% {
+    transform: translateY(var(--fall-y)) scale(0.96);
+    opacity: 0.72;
+  }
+
+  72% {
+    transform: translateY(5%) scale(1.015);
+    opacity: 1;
+  }
+
+  88% {
+    transform: translateY(-2%) scale(0.995);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (min-width: 601px) {
+  .board {
+    width: min(430px, 38vh, max(108px, calc(100vh - 310px)));
+    width: min(430px, 38dvh, max(108px, calc(100dvh - 310px)));
+  }
+
+  .tile {
+    font-size: clamp(22px, 3vh, 32px);
+  }
+}
