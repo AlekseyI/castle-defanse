@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   deleteDamageSource,
   saveDamageSource,
@@ -15,15 +15,37 @@ const EMPTY_SOURCE: DamageSource = {
   id: '',
   name: '',
   description: '',
-  icon: '',
   color: '#ffffff',
 };
 
-export function DamageSourcesEditor() {
+type DamageSourcesEditorProps = {
+  onBackToMain: () => void;
+  onBackToEditors: () => void;
+};
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error(`Не удалось прочитать файл «${file.name}».`));
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error(`Не удалось прочитать файл «${file.name}».`));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSourcesEditorProps) {
   const [sources, setSources] = useState<DamageSource[]>(() => loadDamageSources());
-  const [editingId, setEditingId] = useState<string | undefined>();
-  const [draft, setDraft] = useState<DamageSource>({ ...EMPTY_SOURCE });
-  const [showForm, setShowForm] = useState(false);
+  const sortedSources = useMemo(
+    () => [...sources].sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+    [sources],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(() => sortedSources[0]?.id ?? null);
+  const [editingId, setEditingId] = useState<string | undefined>(() => sortedSources[0]?.id);
+  const [draft, setDraft] = useState<DamageSource>(() => ({ ...(sortedSources[0] ?? EMPTY_SOURCE) }));
+  const [isCreating, setIsCreating] = useState(false);
+
+  const selectedSource = sources.find((source) => source.id === selectedId) ?? null;
   const validation = useMemo(
     () => validateDamageSource(draft, sources, editingId),
     [draft, editingId, sources],
@@ -34,181 +56,230 @@ export function DamageSourcesEditor() {
     persistDamageSources(next);
   };
 
-  const openCreate = () => {
-    setEditingId(undefined);
-    setDraft({ ...EMPTY_SOURCE });
-    setShowForm(true);
-  };
+  useEffect(() => {
+    if (isCreating) return;
+    if (selectedId && sources.some((source) => source.id === selectedId)) return;
 
-  const openEdit = (source: DamageSource) => {
+    const next = [...sources].sort((a, b) => a.name.localeCompare(b.name, 'ru'))[0] ?? null;
+    setSelectedId(next?.id ?? null);
+    setEditingId(next?.id);
+    setDraft({ ...(next ?? EMPTY_SOURCE) });
+  }, [isCreating, selectedId, sources]);
+
+  const selectSource = (source: DamageSource) => {
+    setSelectedId(source.id);
     setEditingId(source.id);
     setDraft({ ...source });
-    setShowForm(true);
+    setIsCreating(false);
   };
 
-  const closeForm = () => {
-    setShowForm(false);
+  const openCreate = () => {
+    setSelectedId(null);
     setEditingId(undefined);
     setDraft({ ...EMPTY_SOURCE });
+    setIsCreating(true);
+  };
+
+  const cancelCreate = () => {
+    const next = sortedSources[0] ?? null;
+    setSelectedId(next?.id ?? null);
+    setEditingId(next?.id);
+    setDraft({ ...(next ?? EMPTY_SOURCE) });
+    setIsCreating(false);
   };
 
   const submit = () => {
     if (!validation.valid) return;
-    updateSources(saveDamageSource(sources, draft, editingId));
-    closeForm();
+
+    const next = saveDamageSource(sources, draft, editingId);
+    const savedId = draft.id.trim().toLowerCase();
+    updateSources(next);
+    setSelectedId(savedId);
+    setEditingId(savedId);
+    setDraft({ ...next.find((source) => source.id === savedId)! });
+    setIsCreating(false);
   };
 
-  const remove = (source: DamageSource) => {
-    if (!window.confirm(`Удалить источник «${source.name}»?`)) return;
-    updateSources(deleteDamageSource(sources, source.id));
-    if (editingId === source.id) closeForm();
+  const remove = () => {
+    if (!selectedSource) return;
+    if (!window.confirm(`Удалить источник «${selectedSource.name}»?`)) return;
+
+    const selectedIndex = sortedSources.findIndex((source) => source.id === selectedSource.id);
+    const remaining = deleteDamageSource(sources, selectedSource.id);
+    updateSources(remaining);
+
+    const nextSorted = [...remaining].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const next = nextSorted[selectedIndex] ?? nextSorted[selectedIndex - 1] ?? null;
+    setSelectedId(next?.id ?? null);
+    setEditingId(next?.id);
+    setDraft({ ...(next ?? EMPTY_SOURCE) });
+    setIsCreating(false);
   };
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    try {
+      const src = await readFileAsDataUrl(file);
+      setDraft((current) => ({
+        ...current,
+        icon: { name: file.name, src },
+      }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось загрузить изображение.');
+    }
+  };
+
+  const hasEditor = isCreating || selectedSource !== null;
+  const previewColor = draft.color && /^#[0-9a-fA-F]{6}$/.test(draft.color) ? draft.color : '#0f2940';
+  const fallbackLabel = draft.name.slice(0, 1).toUpperCase() || '•';
 
   return (
     <main className={styles.screen}>
-      <header className={styles.header}>
-        <div>
-          <div className={styles.eyebrow}>Редакторы игры</div>
-          <h1>Источники урона</h1>
-          <p>Справочник источников. Здесь хранится только их описание и визуальная идентичность.</p>
-        </div>
-        <div className={styles.headerActions}>
-          <a className={styles.secondaryButton} href={window.location.pathname}>В игру</a>
-          <button className={styles.primaryButton} type="button" onClick={openCreate}>+ Добавить</button>
-        </div>
+      <header className={styles.topbar}>
+        <button className={styles.toolbarButton} type="button" onClick={onBackToMain}>Главное меню</button>
+        <strong>Редактор источников урона</strong>
+        <button className={styles.toolbarButton} type="button" onClick={onBackToEditors}>Все редакторы</button>
       </header>
 
-      <section className={styles.content}>
-        <div className={styles.listHeader}>
-          <strong>{sources.length} источника</strong>
-          <span>ID используется как технический ключ.</span>
-        </div>
-
-        <div className={styles.grid}>
-          {sources.map((source) => (
-            <article className={styles.card} key={source.id}>
-              <div className={styles.cardTop}>
-                <div
-                  className={styles.iconBox}
-                  style={{ backgroundColor: source.color ?? '#1e293b' }}
-                >
-                  {source.icon || '•'}
-                </div>
-                <div className={styles.cardTitle}>
-                  <h2>{source.name}</h2>
-                  <code>{source.id}</code>
-                </div>
-              </div>
-
-              <p className={styles.description}>{source.description || 'Без описания'}</p>
-
-              <div className={styles.cardMeta}>
-                <span>Цвет</span>
-                <div className={styles.colorValue}>
-                  <i style={{ backgroundColor: source.color ?? 'transparent' }} />
-                  <code>{source.color || '—'}</code>
-                </div>
-              </div>
-
-              <div className={styles.cardActions}>
-                <button type="button" onClick={() => openEdit(source)}>Редактировать</button>
-                <button className={styles.deleteButton} type="button" onClick={() => remove(source)}>Удалить</button>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        {sources.length === 0 && (
-          <div className={styles.emptyState}>
-            <strong>Источников пока нет</strong>
-            <span>Добавьте первый источник урона.</span>
-            <button className={styles.primaryButton} type="button" onClick={openCreate}>+ Добавить источник</button>
+      <div className={styles.layout}>
+        <aside className={styles.listPanel} aria-label="Источники урона">
+          <div className={styles.listHeader}>
+            <div>
+              <h2>Источники урона</h2>
+              <p>{sources.length} в проекте</p>
+            </div>
+            <button className={styles.addButton} type="button" onClick={openCreate} aria-label="Добавить источник урона">+</button>
           </div>
-        )}
-      </section>
 
-      {showForm && (
-        <div className={styles.overlay} role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) closeForm();
-        }}>
-          <section className={styles.editorPanel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <span>{editingId ? 'Редактирование' : 'Новый источник'}</span>
-                <h2>{editingId ? draft.name || editingId : 'Источник урона'}</h2>
+          <div className={styles.list}>
+            {sortedSources.map((source) => (
+              <button
+                key={source.id}
+                type="button"
+                className={`${styles.listItem}${source.id === selectedId && !isCreating ? ` ${styles.active}` : ''}`}
+                onClick={() => selectSource(source)}
+              >
+                <span className={styles.listIcon} style={{ backgroundColor: source.color ?? '#0f2940' }}>
+                  {source.icon ? (
+                    <img src={source.icon.src} alt="" />
+                  ) : (
+                    source.name.slice(0, 1).toUpperCase() || '•'
+                  )}
+                </span>
+                <span className={styles.listItemText}>
+                  <strong>{source.name || 'Без названия'}</strong>
+                  <small>{source.id}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {hasEditor ? (
+          <section className={styles.formPanel}>
+            <div className={styles.formHeader}>
+              <div className={styles.previewCard}>
+                <div className={styles.preview} style={{ backgroundColor: previewColor }}>
+                  {draft.icon ? <img src={draft.icon.src} alt="" /> : fallbackLabel}
+                </div>
+                <div className={styles.previewText}>
+                  <span className={styles.kicker}>Источник урона</span>
+                  <h1>{isCreating ? 'Новый источник' : draft.name || 'Без названия'}</h1>
+                  <p>{draft.description || 'Без описания'}</p>
+                </div>
               </div>
-              <button className={styles.closeButton} type="button" onClick={closeForm} aria-label="Закрыть">×</button>
+
+              <div className={styles.headerActions}>
+                <label className={styles.fileButton}>
+                  Загрузить картинку
+                  <input type="file" accept="image/*,.svg" onChange={handleImageUpload} />
+                </label>
+                <button
+                  className={styles.toolbarButton}
+                  type="button"
+                  disabled={!draft.icon}
+                  onClick={() => setDraft((current) => ({ ...current, icon: undefined }))}
+                >
+                  Убрать картинку
+                </button>
+                {isCreating ? (
+                  <button className={styles.toolbarButton} type="button" onClick={cancelCreate}>Отмена</button>
+                ) : (
+                  <button className={styles.dangerButton} type="button" onClick={remove}>Удалить</button>
+                )}
+                <button className={styles.saveButton} type="button" onClick={submit} disabled={!validation.valid}>Сохранить</button>
+              </div>
             </div>
 
-            <div className={styles.form}>
-              <label>
-                <span>ID *</span>
-                <input
-                  value={draft.id}
-                  onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
-                  placeholder="fire"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                />
-                {validation.errors.id && <small>{validation.errors.id}</small>}
-              </label>
-
-              <label>
-                <span>Название *</span>
-                <input
-                  value={draft.name}
-                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                  placeholder="Огонь"
-                />
-                {validation.errors.name && <small>{validation.errors.name}</small>}
-              </label>
-
-              <label className={styles.fullWidth}>
-                <span>Описание</span>
-                <textarea
-                  value={draft.description ?? ''}
-                  onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
-                  placeholder="Короткое описание источника"
-                  rows={4}
-                />
-              </label>
-
-              <label>
-                <span>Иконка</span>
-                <input
-                  value={draft.icon ?? ''}
-                  onChange={(event) => setDraft((current) => ({ ...current, icon: event.target.value }))}
-                  placeholder="🔥"
-                />
-              </label>
-
-              <label>
-                <span>Цвет</span>
-                <div className={styles.colorInputRow}>
+            <div className={styles.formSection}>
+              <h2>Основное</h2>
+              <div className={styles.formGrid}>
+                <label className={styles.field}>
+                  <span>ID</span>
                   <input
-                    className={styles.colorPicker}
-                    type="color"
-                    value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color : '#ffffff'}
-                    onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
-                  />
-                  <input
-                    value={draft.color ?? ''}
-                    onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
-                    placeholder="#e9573f"
+                    value={draft.id}
+                    aria-invalid={Boolean(validation.errors.id)}
+                    onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
+                    placeholder="fire"
+                    autoCapitalize="none"
                     spellCheck={false}
                   />
-                </div>
-                {validation.errors.color && <small>{validation.errors.color}</small>}
-              </label>
-            </div>
+                  {validation.errors.id && <small className={styles.fieldError}>{validation.errors.id}</small>}
+                </label>
 
-            <div className={styles.panelFooter}>
-              <button className={styles.secondaryButton} type="button" onClick={closeForm}>Отмена</button>
-              <button className={styles.primaryButton} type="button" onClick={submit} disabled={!validation.valid}>Сохранить</button>
+                <label className={styles.field}>
+                  <span>Название</span>
+                  <input
+                    value={draft.name}
+                    aria-invalid={Boolean(validation.errors.name)}
+                    onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Огонь"
+                  />
+                  {validation.errors.name && <small className={styles.fieldError}>{validation.errors.name}</small>}
+                </label>
+
+                <label className={styles.field}>
+                  <span>Цвет</span>
+                  <div className={styles.colorRow}>
+                    <input
+                      className={styles.colorPicker}
+                      type="color"
+                      value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color : '#ffffff'}
+                      onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+                    />
+                    <input
+                      value={draft.color ?? ''}
+                      aria-invalid={Boolean(validation.errors.color)}
+                      onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+                      placeholder="#e9573f"
+                      spellCheck={false}
+                    />
+                  </div>
+                  {validation.errors.color && <small className={styles.fieldError}>{validation.errors.color}</small>}
+                </label>
+
+                <label className={`${styles.field} ${styles.fullRow}`}>
+                  <span>Описание</span>
+                  <textarea
+                    value={draft.description ?? ''}
+                    onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Короткое описание источника"
+                  />
+                </label>
+              </div>
             </div>
           </section>
-        </div>
-      )}
+        ) : (
+          <section className={styles.emptyState}>
+            <h1>Источников урона пока нет</h1>
+            <p>Добавьте первый источник урона.</p>
+            <button className={styles.addEmptyButton} type="button" onClick={openCreate}>Добавить</button>
+          </section>
+        )}
+      </div>
     </main>
   );
 }

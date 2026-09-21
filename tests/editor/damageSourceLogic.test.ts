@@ -10,7 +10,10 @@ import type { DamageSource } from '../../src/editor/damageSources/types';
 const fire: DamageSource = {
   id: 'fire',
   name: 'Огонь',
-  icon: '🔥',
+  icon: {
+    name: 'fire.png',
+    src: 'data:image/png;base64,fire',
+  },
   color: '#e9573f',
 };
 
@@ -20,13 +23,19 @@ describe('damageSourceLogic', () => {
       id: '  FIRE_NEW  ',
       name: '  Новый огонь  ',
       description: '  Описание  ',
-      icon: ' 🔥 ',
+      icon: {
+        name: ' fire.png ',
+        src: 'data:image/png;base64,fire',
+      },
       color: '#ABCDEF',
     })).toEqual({
       id: 'fire_new',
       name: 'Новый огонь',
       description: 'Описание',
-      icon: '🔥',
+      icon: {
+        name: 'fire.png',
+        src: 'data:image/png;base64,fire',
+      },
       color: '#abcdef',
     });
   });

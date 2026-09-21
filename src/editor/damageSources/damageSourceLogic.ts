@@ -15,11 +15,15 @@ export function normalizeDamageSource(source: DamageSource): DamageSource {
   };
 
   const description = source.description?.trim();
-  const icon = source.icon?.trim();
   const color = source.color?.trim();
 
   if (description) normalized.description = description;
-  if (icon) normalized.icon = icon;
+  if (source.icon?.src) {
+    normalized.icon = {
+      name: source.icon.name.trim(),
+      src: source.icon.src,
+    };
+  }
   if (color) normalized.color = color.toLowerCase();
 
   return normalized;

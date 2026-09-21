@@ -42,6 +42,7 @@ export class BattleScene extends Container {
   private autoShuffleMessageFor = 0;
   private autoShuffleText: Text | null = null;
   private resultOverlay: Container | null = null;
+  private cleanupDone = false;
 
   constructor(app: Application) {
     super();
@@ -63,7 +64,10 @@ export class BattleScene extends Container {
   }
 
   destroy(options?: Parameters<Container['destroy']>[0]) {
-    this.app.ticker.remove(this.update);
+    if (this.cleanupDone) return;
+    this.cleanupDone = true;
+
+    this.app.ticker?.remove(this.update);
     this.stateUnsubscribe();
     super.destroy(options);
   }

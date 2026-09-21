@@ -1,23 +1,137 @@
-.app {
+.startScreen {
+  width: 100%;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(8, 145, 178, 0.18), transparent 30%),
+    radial-gradient(circle at center, #0f172a 0%, #020617 68%);
+}
+
+.startPanel {
+  width: min(560px, 100%);
+  padding: clamp(28px, 6vw, 52px);
+  border: 1px solid rgba(103, 232, 249, 0.26);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46), inset 0 0 40px rgba(34, 211, 238, 0.05);
+  text-align: center;
+}
+
+.startKicker {
+  color: #67e8f9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.startPanel h1 {
+  margin: 10px 0 32px;
+  color: #f8fafc;
+  font-size: clamp(36px, 8vw, 64px);
+  line-height: 0.98;
+  letter-spacing: 0.02em;
+}
+
+.startActions {
+  display: grid;
+  gap: 12px;
+}
+
+.primaryButton,
+.secondaryButton {
+  width: 100%;
+  border-radius: 14px;
+  color: #ecfeff;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.primaryButton {
+  min-height: 58px;
+  padding: 14px 22px;
+  border: 1px solid rgba(103, 232, 249, 0.38);
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.72), rgba(8, 47, 73, 0.94));
+  font-size: 17px;
+}
+
+.secondaryButton {
+  min-height: 54px;
+  padding: 13px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.76);
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  border-color: rgba(103, 232, 249, 0.7);
+  transform: translateY(-1px);
+}
+
+.secondaryButton:hover {
+  background: rgba(8, 47, 73, 0.62);
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.gameMenuButton:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 3px;
+}
+
+.gameShell {
   display: contents;
 }
 
-.editorLink {
+.gameMenuButton {
   position: fixed;
-  z-index: 50;
+  z-index: 80;
   top: 10px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  right: 12px;
   min-height: 34px;
   padding: 0 11px;
   border: 1px solid #32415e;
   border-radius: 9px;
   color: #c7d5e9;
   background: rgba(15, 24, 42, 0.9);
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
-  text-decoration: none;
+  cursor: pointer;
   backdrop-filter: blur(8px);
+}
+
+.gameMenuButton:hover {
+  border-color: rgba(103, 232, 249, 0.58);
+  background: rgba(8, 47, 73, 0.92);
+}
+
+@media (max-width: 520px) {
+  .startScreen {
+    padding: 16px;
+  }
+
+  .startPanel {
+    padding: 24px 18px;
+  }
+
+  .startPanel h1 {
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-height: 520px) {
+  .startScreen {
+    place-items: start center;
+  }
 }

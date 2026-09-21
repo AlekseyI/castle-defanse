@@ -1,18 +1,57 @@
+import { useState } from 'react';
 import { DamageSourcesEditor } from './screens/DamageSourcesEditor/DamageSourcesEditor';
+import { EditorsScreen } from './screens/EditorsScreen/EditorsScreen';
 import { GameScreen } from './screens/GameScreen/GameScreen';
 import styles from './App.module.css';
 
-export default function App() {
-  const isDamageSourcesEditor = new URLSearchParams(window.location.search).get('editor') === 'damage-sources';
+type AppScreen = 'main' | 'game' | 'editors' | 'damage-sources';
 
-  if (isDamageSourcesEditor) {
-    return <DamageSourcesEditor />;
+export default function App() {
+  const [screen, setScreen] = useState<AppScreen>('main');
+
+  if (screen === 'game') {
+    return (
+      <div className={styles.gameShell}>
+        <GameScreen />
+        <button className={styles.gameMenuButton} type="button" onClick={() => setScreen('main')}>
+          Главное меню
+        </button>
+      </div>
+    );
+  }
+
+  if (screen === 'editors') {
+    return (
+      <EditorsScreen
+        onBack={() => setScreen('main')}
+        onOpenDamageSources={() => setScreen('damage-sources')}
+      />
+    );
+  }
+
+  if (screen === 'damage-sources') {
+    return (
+      <DamageSourcesEditor
+        onBackToMain={() => setScreen('main')}
+        onBackToEditors={() => setScreen('editors')}
+      />
+    );
   }
 
   return (
-    <div className={styles.app}>
-      <GameScreen />
-      <a className={styles.editorLink} href="?editor=damage-sources">Редактор</a>
-    </div>
+    <main className={styles.startScreen}>
+      <section className={styles.startPanel}>
+        <span className={styles.startKicker}>MATCH DEFENSE</span>
+        <h1>Игра</h1>
+        <div className={styles.startActions}>
+          <button className={styles.primaryButton} type="button" onClick={() => setScreen('game')}>
+            Играть
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={() => setScreen('editors')}>
+            Редакторы
+          </button>
+        </div>
+      </section>
+    </main>
   );
 }
