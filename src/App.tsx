@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { DamageSourcesEditor } from './screens/DamageSourcesEditor/DamageSourcesEditor';
 import { EditorsScreen } from './screens/EditorsScreen/EditorsScreen';
 import { GameScreen } from './screens/GameScreen/GameScreen';
+import { UnitsEditor } from './screens/UnitsEditor/UnitsEditor';
 import styles from './App.module.css';
 
-type AppScreen = 'main' | 'game' | 'editors' | 'damage-sources';
+type AppScreen = 'main' | 'game' | 'editors' | 'damage-sources' | 'units';
 
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('main');
@@ -25,6 +26,7 @@ export default function App() {
       <EditorsScreen
         onBack={() => setScreen('main')}
         onOpenDamageSources={() => setScreen('damage-sources')}
+        onOpenUnits={() => setScreen('units')}
       />
     );
   }
@@ -32,6 +34,15 @@ export default function App() {
   if (screen === 'damage-sources') {
     return (
       <DamageSourcesEditor
+        onBackToMain={() => setScreen('main')}
+        onBackToEditors={() => setScreen('editors')}
+      />
+    );
+  }
+
+  if (screen === 'units') {
+    return (
+      <UnitsEditor
         onBackToMain={() => setScreen('main')}
         onBackToEditors={() => setScreen('editors')}
       />

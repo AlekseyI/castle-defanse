@@ -1,15 +1,18 @@
-import { Container, Graphics, Text, type Application } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, Text, type Application } from 'pixi.js';
+import { loadUnits } from '../editor/units/unitStorage';
+import type { UnitDefinition } from '../editor/units/types';
 import { WAVES } from './config';
 import type { TileKind } from './types';
 import { getEnemySpeedScale } from './movementLogic';
 import { getWaveStep } from './waveLogic';
+import { createUnitLookup } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
 import { SpellEffects } from './effects/SpellEffects';
 import { FROST_DURATION } from './effects/FrostEffect';
 
 interface Enemy {
   root: Container;
-  body: Graphics;
+  body: Graphics | Sprite;
   hpBar: Graphics;
   hp: number;
   maxHp: number;
@@ -29,6 +32,7 @@ export class BattleScene extends Container {
   private readonly castle = new Container();
   private readonly enemies: Enemy[] = [];
   private readonly stateUnsubscribe: () => void;
+  private readonly unitsById: Map<string, UnitDefinition>;
   private layoutWidth = 0;
   private enemySpeedScale = 1;
 
@@ -47,6 +51,9 @@ export class BattleScene extends Container {
   constructor(app: Application) {
     super();
     this.app = app;
+
+    const units = loadUnits();
+    this.unitsById = createUnitLookup(units);
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
     this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
@@ -108,7 +115,8 @@ export class BattleScene extends Container {
     if (step === 'spawn-enemy') {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        this.spawnEnemy(wave.hp, wave.speed, wave.damage);
+        const unit = this.getUnit(wave.unitId);
+        if (unit) this.spawnEnemy(unit);
         this.spawnedThisWave += 1;
         this.spawnTimer = wave.spawnEvery;
       }
@@ -118,7 +126,8 @@ export class BattleScene extends Container {
     if (step === 'wait-enemies') return;
 
     if (step === 'spawn-boss') {
-      this.spawnEnemy(wave.boss.hp, wave.boss.speed, wave.boss.damage, true);
+      const boss = this.getUnit(wave.bossUnitId);
+      if (boss) this.spawnEnemy(boss, true);
       this.bossSpawnedThisWave = true;
       return;
     }
@@ -136,22 +145,31 @@ export class BattleScene extends Container {
     useGameStore.getState().setWave(this.waveIndex + 1);
   }
 
-  private spawnEnemy(hp: number, speed: number, damage: number, isBoss = false) {
+  private getUnit(unitId: string): UnitDefinition | undefined {
+    return this.unitsById.get(unitId);
+  }
+
+  private spawnEnemy(unit: UnitDefinition, isBoss = false) {
+    const { hp, speed, damage } = unit;
     const root = new Container();
     const body = new Graphics();
     const hpBar = new Graphics();
     const radius = isBoss ? 31 : 20;
-    const eyeY = isBoss ? -6 : -4;
-    const eyeX = isBoss ? 10 : 7;
-    const eyeRadius = isBoss ? 3.5 : 2.5;
-    const eyeLeft = new Graphics().circle(-eyeX, eyeY, eyeRadius).fill(0xffffff);
-    const eyeRight = new Graphics().circle(eyeX, eyeY, eyeRadius).fill(0xffffff);
 
     body
       .circle(0, 0, radius)
       .fill({ color: isBoss ? 0x8b5cf6 : 0x8bc34a })
       .stroke({ color: isBoss ? 0xf5d0fe : 0x365314, width: isBoss ? 4 : 3 });
-    root.addChild(body, eyeLeft, eyeRight, hpBar);
+    root.addChild(body, hpBar);
+
+    if (!unit.image?.src) {
+      const eyeY = isBoss ? -6 : -4;
+      const eyeX = isBoss ? 10 : 7;
+      const eyeRadius = isBoss ? 3.5 : 2.5;
+      const eyeLeft = new Graphics().circle(-eyeX, eyeY, eyeRadius).fill(0xffffff);
+      const eyeRight = new Graphics().circle(eyeX, eyeY, eyeRadius).fill(0xffffff);
+      root.addChild(eyeLeft, eyeRight);
+    }
 
     if (isBoss) {
       const bossLabel = new Text({
@@ -173,6 +191,32 @@ export class BattleScene extends Container {
     const enemy: Enemy = { root, body, hpBar, hp, maxHp: hp, speed, damage, frozenFor: 0, isBoss };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
+
+    if (unit.image?.src) this.applyEnemyImage(enemy, unit.image.src, radius);
+  }
+
+  private applyEnemyImage(enemy: Enemy, src: string, radius: number) {
+    const image = new Image();
+
+    image.onload = () => {
+      if (enemy.root.destroyed) return;
+
+      const texture = Texture.from(image);
+      const sprite = new Sprite(texture);
+      const sourceSize = Math.max(image.naturalWidth, image.naturalHeight);
+      const targetSize = radius * 2;
+
+      sprite.anchor.set(0.5);
+      if (sourceSize > 0) sprite.scale.set(targetSize / sourceSize);
+      sprite.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
+
+      enemy.root.addChildAt(sprite, 0);
+      enemy.root.removeChild(enemy.body);
+      enemy.body.destroy();
+      enemy.body = sprite;
+    };
+
+    image.src = src;
   }
 
   private updateEnemies(dt: number) {

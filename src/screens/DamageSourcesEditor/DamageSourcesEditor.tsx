@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   deleteDamageSource,
+  normalizeDamageSource,
   saveDamageSource,
   validateDamageSource,
 } from '../../editor/damageSources/damageSourceLogic';
@@ -88,17 +89,27 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
     setIsCreating(false);
   };
 
-  const submit = () => {
+  useEffect(() => {
     if (!validation.valid) return;
 
-    const next = saveDamageSource(sources, draft, editingId);
-    const savedId = draft.id.trim().toLowerCase();
+    const normalized = normalizeDamageSource(draft);
+    const current = editingId ? sources.find((source) => source.id === editingId) : undefined;
+    const isUnchanged = current
+      && current.id === normalized.id
+      && current.name === normalized.name
+      && current.description === normalized.description
+      && current.color === normalized.color
+      && current.icon?.name === normalized.icon?.name
+      && current.icon?.src === normalized.icon?.src;
+
+    if (isUnchanged) return;
+
+    const next = saveDamageSource(sources, normalized, editingId);
     updateSources(next);
-    setSelectedId(savedId);
-    setEditingId(savedId);
-    setDraft({ ...next.find((source) => source.id === savedId)! });
+    setSelectedId(normalized.id);
+    setEditingId(normalized.id);
     setIsCreating(false);
-  };
+  }, [draft, editingId, sources, validation.valid]);
 
   const remove = () => {
     if (!selectedSource) return;
@@ -210,7 +221,6 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
                 ) : (
                   <button className={styles.dangerButton} type="button" onClick={remove}>Удалить</button>
                 )}
-                <button className={styles.saveButton} type="button" onClick={submit} disabled={!validation.valid}>Сохранить</button>
               </div>
             </div>
 
