@@ -8,6 +8,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 55,
     speed: 38,
     damage: 10,
+    coinsOnDeath: 1,
   },
   {
     id: 'wave_1_boss',
@@ -16,6 +17,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 260,
     speed: 28,
     damage: 24,
+    coinsOnDeath: 1,
   },
   {
     id: 'wave_2_enemy',
@@ -24,6 +26,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 70,
     speed: 43,
     damage: 11,
+    coinsOnDeath: 1,
   },
   {
     id: 'wave_2_boss',
@@ -32,6 +35,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 380,
     speed: 31,
     damage: 28,
+    coinsOnDeath: 1,
   },
   {
     id: 'wave_3_enemy',
@@ -40,6 +44,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 90,
     speed: 48,
     damage: 12,
+    coinsOnDeath: 1,
   },
   {
     id: 'wave_3_boss',
@@ -48,5 +53,6 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     hp: 520,
     speed: 34,
     damage: 34,
+    coinsOnDeath: 1,
   },
 ];

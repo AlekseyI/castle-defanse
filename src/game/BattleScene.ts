@@ -1,14 +1,15 @@
 import { Container, Graphics, Sprite, Texture, Text, type Application } from 'pixi.js';
+import { loadAbilities } from '../editor/abilities/abilityStorage';
+import type { AbilityDefinition, AbilityTarget } from '../editor/abilities/types';
 import { loadUnits } from '../editor/units/unitStorage';
 import type { UnitDefinition } from '../editor/units/types';
 import { WAVES } from './config';
 import type { TileKind } from './types';
 import { getEnemySpeedScale } from './movementLogic';
 import { getWaveStep } from './waveLogic';
-import { createUnitLookup } from './unitRuntime';
+import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
 import { SpellEffects } from './effects/SpellEffects';
-import { FROST_DURATION } from './effects/FrostEffect';
 
 interface Enemy {
   root: Container;
@@ -18,7 +19,10 @@ interface Enemy {
   maxHp: number;
   speed: number;
   damage: number;
+  coinsOnDeath: number;
+  damageProtection?: UnitDefinition['damageProtection'];
   frozenFor: number;
+  slowPercent: number;
   isBoss: boolean;
 }
 
@@ -33,6 +37,7 @@ export class BattleScene extends Container {
   private readonly enemies: Enemy[] = [];
   private readonly stateUnsubscribe: () => void;
   private readonly unitsById: Map<string, UnitDefinition>;
+  private readonly abilitiesById: Map<TileKind, AbilityDefinition>;
   private layoutWidth = 0;
   private enemySpeedScale = 1;
 
@@ -54,11 +59,13 @@ export class BattleScene extends Container {
 
     const units = loadUnits();
     this.unitsById = createUnitLookup(units);
+    const abilities = loadAbilities();
+    this.abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
     this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
 
-    useGameStore.getState().reset(WAVES.length);
+    useGameStore.getState().reset(WAVES.length, [...this.abilitiesById.keys()]);
     this.buildCastle();
     this.buildNotice();
     this.layout();
@@ -150,7 +157,7 @@ export class BattleScene extends Container {
   }
 
   private spawnEnemy(unit: UnitDefinition, isBoss = false) {
-    const { hp, speed, damage } = unit;
+    const { hp, speed, damage, coinsOnDeath, damageProtection } = unit;
     const root = new Container();
     const body = new Graphics();
     const hpBar = new Graphics();
@@ -188,7 +195,20 @@ export class BattleScene extends Container {
     root.y = isBoss ? Math.min(82, spawnMaxY) : 62 + Math.random() * Math.max(0, spawnMaxY - 62);
 
     this.enemiesLayer.addChild(root);
-    const enemy: Enemy = { root, body, hpBar, hp, maxHp: hp, speed, damage, frozenFor: 0, isBoss };
+    const enemy: Enemy = {
+      root,
+      body,
+      hpBar,
+      hp,
+      maxHp: hp,
+      speed,
+      damage,
+      coinsOnDeath,
+      damageProtection,
+      frozenFor: 0,
+      slowPercent: 0,
+      isBoss,
+    };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
 
@@ -223,7 +243,8 @@ export class BattleScene extends Container {
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const enemy = this.enemies[i];
       enemy.frozenFor = Math.max(0, enemy.frozenFor - dt);
-      const speedMultiplier = enemy.frozenFor > 0 ? 0.18 : 1;
+      if (enemy.frozenFor <= 0) enemy.slowPercent = 0;
+      const speedMultiplier = enemy.frozenFor > 0 ? Math.max(0, 1 - enemy.slowPercent / 100) : 1;
       enemy.body.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
       enemy.root.y += enemy.speed * this.enemySpeedScale * speedMultiplier * dt;
 
@@ -234,8 +255,8 @@ export class BattleScene extends Container {
     }
   }
 
-  private damageEnemy(enemy: Enemy, amount: number) {
-    enemy.hp -= amount;
+  private damageEnemy(enemy: Enemy, amount: number, sourceId: string) {
+    enemy.hp -= getDamageAfterProtection(amount, sourceId, enemy.damageProtection);
     if (enemy.hp <= 0) {
       const index = this.enemies.indexOf(enemy);
       if (index >= 0) this.removeEnemy(enemy, index, true);
@@ -247,7 +268,7 @@ export class BattleScene extends Container {
   private removeEnemy(enemy: Enemy, index: number, killed: boolean) {
     this.enemies.splice(index, 1);
     enemy.root.destroy({ children: true });
-    if (killed) useGameStore.getState().addKill();
+    if (killed) useGameStore.getState().addKill(enemy.coinsOnDeath);
   }
 
   private redrawEnemyHp(enemy: Enemy) {
@@ -273,44 +294,87 @@ export class BattleScene extends Container {
 
   private cast(kind: TileKind, spendCharge = true) {
     const state = useGameStore.getState();
-    const needsEnemy = kind === 'fire' || kind === 'ice' || kind === 'lightning';
-    const hasUsefulTarget = needsEnemy ? this.enemies.length > 0 : state.castleHp < state.castleMaxHp;
+    const ability = this.abilitiesById.get(kind);
+    if (!ability || ability.effects.length === 0) return;
 
-    // Do not consume a charge if the spell cannot have any effect.
+    const hasDamage = ability.effects.some((effect) => effect.type === 'damage');
+    const hasSlow = ability.effects.some((effect) => effect.type === 'slow');
+    const hasHeal = ability.effects.some((effect) => effect.type === 'heal');
+    const visualKind = ability.target.type === 'area-enemies'
+      ? 'fire'
+      : hasDamage
+        ? 'lightning'
+        : hasSlow
+          ? 'ice'
+          : 'heal';
+    const targets = this.resolveEnemyTargets(ability.target);
+    const lightningTargetPoints = visualKind === 'lightning'
+      ? targets.map((enemy) => ({ x: enemy.root.x, y: enemy.root.y }))
+      : [];
+    const hasUsefulTarget = ability.target.type === 'castle'
+      ? hasDamage || (hasHeal && state.castleHp < state.castleMaxHp)
+      : ability.target.type === 'area-enemies' || targets.length > 0;
+
+    // Do not consume a charge if the ability cannot have any effect.
     if (state.phase !== 'playing' || !hasUsefulTarget || (spendCharge && !state.spendCharge(kind))) {
       return;
     }
 
-    switch (kind) {
-      case 'fire': {
-        const targets = this.closestEnemies(4);
-        targets.forEach((enemy) => this.damageEnemy(enemy, 55));
-        this.spellEffects.play('fire');
-        break;
-      }
-      case 'ice': {
-        this.enemies.forEach((enemy) => {
-          enemy.frozenFor = Math.max(enemy.frozenFor, FROST_DURATION);
+    for (const effect of ability.effects) {
+      if (effect.type === 'damage') {
+        if (ability.target.type === 'castle') {
+          state.damageCastle(effect.amount);
+        } else {
+          targets.forEach((enemy) => this.damageEnemy(enemy, effect.amount, effect.damageSourceId));
+        }
+      } else if (effect.type === 'slow') {
+        targets.forEach((enemy) => {
+          enemy.frozenFor = Math.max(enemy.frozenFor, effect.duration);
+          enemy.slowPercent = Math.max(enemy.slowPercent, effect.slowPercent);
         });
-        this.spellEffects.play('ice');
-        break;
-      }
-      case 'lightning': {
-        const targets = this.closestEnemies(3);
-        const targetPoints = targets.map((enemy) => ({ x: enemy.root.x, y: enemy.root.y }));
-        this.spellEffects.play('lightning', {
-          source: { x: this.app.screen.width / 2, y: this.castleY - 18 },
-          targets: targetPoints,
-        });
-        targets.forEach((enemy) => this.damageEnemy(enemy, 80));
-        break;
-      }
-      case 'shield': {
-        state.healCastle(22);
-        this.spellEffects.play('shield');
-        break;
+      } else if (effect.type === 'heal') {
+        state.healCastle(effect.amount);
       }
     }
+
+    if (visualKind === 'lightning') {
+      this.spellEffects.play(visualKind, {
+        source: { x: this.app.screen.width / 2, y: this.castleY - 18 },
+        targets: lightningTargetPoints,
+      });
+      return;
+    }
+
+    this.spellEffects.play(visualKind, {
+      areaHeightPercent: ability.target.type === 'area-enemies'
+        ? ability.target.areaHeightPercent
+        : undefined,
+    });
+  }
+
+  private resolveEnemyTargets(target: AbilityTarget): Enemy[] {
+    if (target.type === 'all-enemies') return [...this.enemies];
+    if (target.type === 'area-enemies') return this.enemiesInFireArea(target.areaHeightPercent ?? 50);
+    if (target.type === 'castle') return [];
+
+    const limit = Math.max(1, Math.floor(target.count ?? 1));
+    if (target.type === 'random-enemies') return this.randomEnemies(limit);
+    return this.closestEnemies(limit);
+  }
+
+  private enemiesInFireArea(heightPercent: number) {
+    const clampedHeightPercent = Math.max(1, Math.min(100, heightPercent));
+    const fireAreaTop = this.battleHeight * (1 - clampedHeightPercent / 100);
+    return this.enemies.filter((enemy) => enemy.root.y >= fireAreaTop);
+  }
+
+  private randomEnemies(limit: number) {
+    const pool = [...this.enemies];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, limit);
   }
 
   private closestEnemies(limit: number) {
@@ -452,6 +516,6 @@ export class BattleScene extends Container {
     this.bossSpawnedThisWave = false;
     this.spawnTimer = 0;
     this.betweenWavesFor = 0;
-    useGameStore.getState().reset(WAVES.length);
+    useGameStore.getState().reset(WAVES.length, [...this.abilitiesById.keys()]);
   }
 }

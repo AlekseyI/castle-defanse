@@ -1,5 +1,4 @@
 import { Container } from 'pixi.js';
-import type { TileKind } from '../types';
 import { EffectStack } from './EffectStack';
 import { FireWallEffect } from './FireWallEffect';
 import { FrostEffect } from './FrostEffect';
@@ -8,11 +7,12 @@ import { LightningEffect } from './LightningEffect';
 import type { BattleEffect, EffectBounds, EffectPoint, SpellEffectOptions } from './types';
 
 type EffectContainer = Container & BattleEffect;
+export type SpellVisualKind = 'fire' | 'ice' | 'lightning' | 'heal';
 
 const DEFAULT_BOUNDS: EffectBounds = { x: 0, y: 0, width: 1, height: 1 };
 
 export class SpellEffects extends Container {
-  private readonly activeEffects = new EffectStack<TileKind, EffectContainer>();
+  private readonly activeEffects = new EffectStack<SpellVisualKind, EffectContainer>();
   private bounds: EffectBounds = DEFAULT_BOUNDS;
 
   constructor() {
@@ -21,12 +21,12 @@ export class SpellEffects extends Container {
     this.sortableChildren = true;
   }
 
-  play(kind: TileKind, options: SpellEffectOptions = {}) {
+  play(kind: SpellVisualKind, options: SpellEffectOptions = {}) {
     const effect = this.createEffect(kind, options);
     if (!effect) return;
 
-    // Only one instance of every spell type may exist at a time. Re-applying the
-    // same spell removes the running instance and starts the animation from zero.
+    // Only one instance of every visual effect type may exist at a time. Re-applying
+    // the same visual removes the running instance and starts the animation from zero.
     const { entry, replaced } = this.activeEffects.replace(kind, effect);
     if (replaced) {
       this.removeChild(replaced);
@@ -61,10 +61,10 @@ export class SpellEffects extends Container {
     this.activeEffects.clear();
   }
 
-  private createEffect(kind: TileKind, options: SpellEffectOptions): EffectContainer | null {
+  private createEffect(kind: SpellVisualKind, options: SpellEffectOptions): EffectContainer | null {
     switch (kind) {
       case 'fire':
-        return new FireWallEffect(this.bounds);
+        return new FireWallEffect(this.bounds, options.areaHeightPercent);
       case 'ice':
         return new FrostEffect(this.bounds);
       case 'lightning': {
@@ -72,7 +72,7 @@ export class SpellEffects extends Container {
         const targets = options.targets ?? [];
         return targets.length > 0 ? new LightningEffect(this.bounds, source, targets) : null;
       }
-      case 'shield':
+      case 'heal':
         return new HealEffect(this.bounds);
     }
   }

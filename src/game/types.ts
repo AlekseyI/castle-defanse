@@ -1,4 +1,4 @@
-export type TileKind = 'fire' | 'ice' | 'lightning' | 'shield';
+export type TileKind = string;
 
 export type SpellCharges = Record<TileKind, number>;
 

@@ -26,6 +26,7 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     hp: unit.hp,
     speed: unit.speed,
     damage: unit.damage,
+    coinsOnDeath: unit.coinsOnDeath,
   };
 
   if (unit.gameKey) normalized.gameKey = unit.gameKey;
@@ -73,6 +74,10 @@ export function validateUnit(
 
   if (!Number.isFinite(normalized.damage) || normalized.damage < 0) {
     errors.damage = 'Урон должен быть числом 0 или больше.';
+  }
+
+  if (!Number.isFinite(normalized.coinsOnDeath) || normalized.coinsOnDeath < 0) {
+    errors.coinsOnDeath = 'Количество монет должно быть числом 0 или больше.';
   }
 
   if (normalized.damageProtection) {

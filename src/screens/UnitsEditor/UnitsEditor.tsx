@@ -12,6 +12,7 @@ const EMPTY_UNIT: UnitDefinition = {
   hp: 100,
   speed: 40,
   damage: 10,
+  coinsOnDeath: 1,
   damageProtection: {},
 };
 
@@ -121,6 +122,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
       && current.hp === normalized.hp
       && current.speed === normalized.speed
       && current.damage === normalized.damage
+      && current.coinsOnDeath === normalized.coinsOnDeath
       && current.gameKey === normalized.gameKey
       && isSameDamageProtection(current.damageProtection, normalized.damageProtection)
       && current.image?.name === normalized.image?.name
@@ -314,6 +316,19 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                   />
                   {validation.errors.damage && <small className={styles.fieldError}>{validation.errors.damage}</small>}
                 </label>
+
+                <label className={styles.field}>
+                  <span>Монеты за смерть</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={Number.isFinite(draft.coinsOnDeath) ? draft.coinsOnDeath : ''}
+                    aria-invalid={Boolean(validation.errors.coinsOnDeath)}
+                    onChange={(event) => setDraft((current) => ({ ...current, coinsOnDeath: parseNumber(event.target.value) }))}
+                  />
+                  {validation.errors.coinsOnDeath && <small className={styles.fieldError}>{validation.errors.coinsOnDeath}</small>}
+                </label>
               </div>
             </div>
 
@@ -322,13 +337,13 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
               <div className={styles.formGrid}>
                 {damageSources.map((source) => (
                   <label className={styles.field} key={source.id}>
-                    <span>{source.name} ({source.id}), %</span>
+                    <span>{source.name}, %</span>
                     <input
                       type="number"
                       min="-100"
                       max="100"
                       step="1"
-                      value={Number.isFinite(draft.damageProtection?.[source.id]) ? draft.damageProtection?.[source.id] : ''}
+                      value={Number.isFinite(draft.damageProtection?.[source.id]) ? draft.damageProtection?.[source.id] : 0}
                       aria-invalid={Boolean(validation.errors.damageProtection)}
                       onChange={(event) => {
                         const value = parseNumber(event.target.value);

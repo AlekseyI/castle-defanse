@@ -38,9 +38,11 @@ afterEach(() => {
   randomSpy.mockRestore();
 });
 
+const TILE_KINDS = ['fire', 'ice', 'lightning', 'shield'];
+
 describe('Board', () => {
   it('animates and restores a swap that does not create a match', async () => {
-    const board = new Board({ onCharge: vi.fn(), wait: async () => undefined });
+    const board = new Board({ tileKinds: TILE_KINDS, onCharge: vi.fn(), wait: async () => undefined });
     const initial = board.getSnapshot().grid.map((row) => [...row]);
     const [from, to] = findSwap(initial, false);
     const snapshots: BoardSnapshot[] = [];
@@ -68,7 +70,7 @@ describe('Board', () => {
 
   it('supports swapping adjacent cells directly for swipe interactions', async () => {
     const onCharge = vi.fn();
-    const board = new Board({ onCharge, wait: async () => undefined });
+    const board = new Board({ tileKinds: TILE_KINDS, onCharge, wait: async () => undefined });
     const [from, to] = findSwap(board.getSnapshot().grid, true);
 
     await board.swap(from, to);
@@ -82,7 +84,7 @@ describe('Board', () => {
 
   it('awards charges when a swap creates a match', async () => {
     const onCharge = vi.fn();
-    const board = new Board({ onCharge, wait: async () => undefined });
+    const board = new Board({ tileKinds: TILE_KINDS, onCharge, wait: async () => undefined });
     const [from, to] = findSwap(board.getSnapshot().grid, true);
 
     await board.tap(from);

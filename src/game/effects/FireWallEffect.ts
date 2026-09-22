@@ -30,12 +30,14 @@ export class FireWallEffect extends Container implements BattleEffect {
   private readonly fireTexture: Texture;
   private readonly sprites: Sprite[] = [];
   private bounds: EffectBounds;
+  private readonly areaHeightPercent: number;
   private elapsed = 0;
   private frameAccumulator = 0;
 
-  constructor(bounds: EffectBounds) {
+  constructor(bounds: EffectBounds, areaHeightPercent = 50) {
     super();
     this.bounds = bounds;
+    this.areaHeightPercent = Math.max(1, Math.min(100, areaHeightPercent));
     this.eventMode = 'none';
 
     this.source = new BufferImageSource({
@@ -133,7 +135,8 @@ export class FireWallEffect extends Container implements BattleEffect {
   }
 
   private applyBounds() {
-    const pixelScale = (this.bounds.height * 0.5) / FIRE_VISIBLE_ROWS;
+    const areaHeight = this.bounds.height * (this.areaHeightPercent / 100);
+    const pixelScale = areaHeight / FIRE_PROPAGATION_ROWS;
     const fireWidth = FIRE_WIDTH * pixelScale;
     const fireHeight = FIRE_HEIGHT * pixelScale;
     const fireBottom = this.bounds.y + this.bounds.height;

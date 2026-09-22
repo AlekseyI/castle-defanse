@@ -22,6 +22,7 @@ export interface BoardSnapshot {
 }
 
 interface BoardOptions {
+  tileKinds: TileKind[];
   onCharge: (kind: TileKind, amount: number) => void;
   onAutoShuffle?: () => void;
   wait?: (ms: number) => Promise<void>;
@@ -36,6 +37,7 @@ export class Board {
   private fallRevision = 0;
   private rollbackSwap: { from: GridPoint; to: GridPoint } | null = null;
   private readonly listeners = new Set<() => void>();
+  private readonly tileKinds: TileKind[];
   private readonly onCharge: BoardOptions['onCharge'];
   private readonly onAutoShuffle?: BoardOptions['onAutoShuffle'];
   private readonly wait: (ms: number) => Promise<void>;
@@ -49,6 +51,7 @@ export class Board {
   };
 
   constructor(options: BoardOptions) {
+    this.tileKinds = [...options.tileKinds];
     this.onCharge = options.onCharge;
     this.onAutoShuffle = options.onAutoShuffle;
     this.wait = options.wait ?? ((ms) => new Promise<void>((resolve) => window.setTimeout(resolve, ms)));
@@ -68,7 +71,7 @@ export class Board {
     this.locked = false;
     this.fallDistances = null;
     this.rollbackSwap = null;
-    this.grid = generatePlayableGrid();
+    this.grid = generatePlayableGrid(this.tileKinds);
     this.emit();
   }
 
@@ -133,7 +136,7 @@ export class Board {
       if (operationId !== this.operationId) return;
 
       this.clearMatchedCells(runs);
-      this.fallDistances = collapseAndRefill(this.grid);
+      this.fallDistances = collapseAndRefill(this.grid, this.tileKinds);
       this.fallRevision += 1;
       this.emit();
 
@@ -143,7 +146,7 @@ export class Board {
     }
 
     if (!hasPossibleMove(this.grid)) {
-      this.grid = generatePlayableGrid();
+      this.grid = generatePlayableGrid(this.tileKinds);
       this.onAutoShuffle?.();
     }
 

@@ -1,0 +1,607 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #e2e8f0;
+  background: #070b13;
+  touch-action: pan-y;
+  user-select: text;
+}
+
+.topbar {
+  min-height: 58px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(8, 15, 29, 0.96);
+}
+
+.topbar strong {
+  margin-right: auto;
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.toolbarButton,
+.dangerButton,
+.addButton,
+.saveButton,
+.addEmptyButton {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.78);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toolbarButton {
+  min-height: 38px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.toolbarButton:hover {
+  border-color: rgba(103, 232, 249, 0.5);
+  background: rgba(30, 58, 78, 0.92);
+}
+
+.layout {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(310px, 360px) minmax(0, 1fr);
+}
+
+.listPanel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(8, 15, 29, 0.94);
+}
+
+.listHeader {
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.listHeader h2,
+.formSection h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.listHeader p,
+.emptyState p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.addButton {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-color: rgba(103, 232, 249, 0.38);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.65), rgba(8, 47, 73, 0.9));
+  color: #ecfeff;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.addButton:hover,
+.saveButton:hover,
+.addEmptyButton:hover {
+  border-color: rgba(165, 243, 252, 0.78);
+}
+
+.list {
+  min-height: 0;
+  padding: 10px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  overflow-y: auto;
+}
+
+.listItem {
+  width: 100%;
+  min-width: 0;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  color: #e2e8f0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.listItem:hover {
+  background: rgba(30, 41, 59, 0.68);
+}
+
+.listItem.active {
+  border-color: rgba(103, 232, 249, 0.44);
+  background: rgba(8, 145, 178, 0.14);
+}
+
+.listIcon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 11px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 999px rgba(3, 8, 18, 0.12);
+}
+
+.listItemText {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.listItemText strong,
+.listItemText small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listItemText strong {
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.listItemText small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.formPanel,
+.emptyState {
+  min-width: 0;
+  padding: clamp(22px, 4vw, 42px);
+  overflow-y: auto;
+}
+
+.formHeader {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.previewCard {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.preview {
+  width: 92px;
+  height: 92px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 22px;
+  color: #ffffff;
+  font-size: 38px;
+  font-weight: 900;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.26), inset 0 0 0 999px rgba(3, 8, 18, 0.08);
+}
+
+.previewText {
+  min-width: 0;
+}
+
+.kicker {
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.previewText h1,
+.emptyState h1 {
+  margin: 6px 0 0;
+  color: #ffffff;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+}
+
+.previewText p {
+  max-width: 620px;
+  margin: 8px 0 0;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.dangerButton,
+.saveButton,
+.addEmptyButton {
+  min-height: 40px;
+  padding: 9px 15px;
+  border-radius: 11px;
+}
+
+.dangerButton {
+  border-color: rgba(251, 113, 133, 0.34);
+  background: rgba(136, 19, 55, 0.2);
+  color: #fecdd3;
+}
+
+.dangerButton:hover {
+  border-color: rgba(251, 113, 133, 0.72);
+  background: rgba(159, 18, 57, 0.36);
+}
+
+.saveButton,
+.addEmptyButton {
+  border-color: rgba(103, 232, 249, 0.42);
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.58), rgba(8, 47, 73, 0.9));
+  color: #ecfeff;
+}
+
+.saveButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.formSection {
+  margin-bottom: 18px;
+  padding: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.formGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  outline: none;
+  background: #080f1d;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  user-select: text;
+}
+
+.field textarea {
+  min-height: 116px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
+}
+
+.field input[aria-invalid='true'],
+.field select[aria-invalid='true'] {
+  border-color: #fb7185;
+}
+
+.fieldError {
+  color: #fda4af;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.fullRow {
+  grid-column: 1 / -1;
+}
+
+.colorRow {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.colorRow .colorPicker {
+  padding: 5px;
+  cursor: pointer;
+}
+
+.emptyState {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.addEmptyButton {
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 290px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+
+  .topbar strong {
+    width: 100%;
+    order: -1;
+  }
+
+  .layout {
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .listPanel {
+    min-height: 250px;
+    max-height: 42dvh;
+    order: -1;
+    border-right: 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .formPanel,
+  .emptyState {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding: 20px 14px 28px;
+  }
+
+  .formHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .previewCard {
+    align-items: flex-start;
+  }
+
+  .preview {
+    width: 74px;
+    height: 74px;
+    border-radius: 18px;
+    font-size: 31px;
+  }
+
+  .headerActions {
+    justify-content: flex-start;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullRow {
+    grid-column: auto;
+  }
+}
+
+.listIcon img,
+.preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.fileButton {
+  min-height: 40px;
+  padding: 9px 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.42), rgba(8, 47, 73, 0.82));
+  color: #ecfeff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fileButton:hover {
+  border-color: rgba(165, 243, 252, 0.78);
+}
+
+.fileButton input {
+  display: none;
+}
+
+.toolbarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.multiSelect {
+  position: relative;
+}
+
+.multiSelect summary {
+  min-height: 42px;
+  padding: 9px 36px 9px 11px;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  outline: none;
+  background: #080f1d;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  cursor: pointer;
+  list-style: none;
+}
+
+.multiSelect summary::-webkit-details-marker {
+  display: none;
+}
+
+.multiSelect summary::after {
+  content: '▾';
+  position: absolute;
+  right: 12px;
+  color: #94a3b8;
+  transition: transform 120ms ease;
+}
+
+.multiSelect[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.multiSelect[open] summary,
+.multiSelect summary:focus-visible {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
+}
+
+.multiSelect[aria-invalid='true'] summary {
+  border-color: #fb7185;
+}
+
+.multiSelectMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  background: #0b1322;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.multiSelectOption {
+  min-height: 38px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 8px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.multiSelectOption:hover {
+  background: rgba(51, 65, 85, 0.65);
+}
+
+.multiSelectOption input {
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: #22d3ee;
+}
+
+.effectBlocks {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.effectBlock {
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(8, 15, 29, 0.72);
+}
+
+.effectBlock h3 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 15px;
+}
+
+.effectBlock .formGrid {
+  margin-top: 12px;
+}
+
+.multiSelectOption input[type='checkbox'] {
+  appearance: auto;
+  border: initial;
+  border-radius: 0;
+  background: initial;
+  box-shadow: none;
+}

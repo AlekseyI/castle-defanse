@@ -9,6 +9,8 @@ import {
   swapCells,
 } from '../../../src/game/board/boardLogic';
 
+const TILE_KINDS = ['fire', 'ice', 'lightning', 'shield'];
+
 describe('boardLogic', () => {
   it('detects horizontal and vertical match runs', () => {
     const grid: Cell[][] = [
@@ -77,7 +79,7 @@ describe('boardLogic', () => {
       [null, 'shield'],
     ];
 
-    const fallDistances = collapseAndRefill(grid, () => 0);
+    const fallDistances = collapseAndRefill(grid, TILE_KINDS, () => 0);
 
     expect(grid).toEqual([
       ['fire', 'fire'],
@@ -91,9 +93,22 @@ describe('boardLogic', () => {
     ]);
   });
 
+
+  it('generates cells from the configured ability ids', () => {
+    const kinds = ['fire', 'ice', 'lightning', 'shield', 'meteor'];
+    const grid = generatePlayableGrid(kinds);
+
+    expect(grid.flat().every((cell) => cell !== null && kinds.includes(cell))).toBe(true);
+  });
+
+  it('returns an empty board when there are not enough abilities for match-3', () => {
+    const grid = generatePlayableGrid(['fire', 'ice']);
+    expect(grid.flat().every((cell) => cell === null)).toBe(true);
+  });
+
   it('generates boards with no initial matches and at least one possible move', () => {
     for (let i = 0; i < 100; i += 1) {
-      const grid = generatePlayableGrid();
+      const grid = generatePlayableGrid(TILE_KINDS);
       expect(findMatchRuns(grid)).toHaveLength(0);
       expect(hasPossibleMove(grid)).toBe(true);
     }

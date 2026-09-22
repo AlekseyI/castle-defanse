@@ -8,7 +8,9 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { BOARD_SIZE, TILE_META } from '../../game/config';
+import { loadAbilities } from '../../editor/abilities/abilityStorage';
+import type { AbilityDefinition } from '../../editor/abilities/types';
+import { BOARD_SIZE } from '../../game/config';
 import { BOARD_FALL_ANIMATION_MS, BOARD_SWAP_ANIMATION_MS, Board } from '../../game/board/Board';
 import { areAdjacent } from '../../game/board/boardLogic';
 import type { GridPoint, TileKind } from '../../game/types';
@@ -34,6 +36,12 @@ interface SwapAnimation {
 }
 
 const SWIPE_THRESHOLD = 18;
+const LEGACY_GLYPHS: Record<string, string> = {
+  fire: '🔥',
+  ice: '❄',
+  lightning: '⚡',
+  shield: '✚',
+};
 
 function samePoint(a: GridPoint, b: GridPoint) {
   return a.row === b.row && a.col === b.col;
@@ -78,6 +86,14 @@ function getFallOffset(distance: number) {
   return `calc(-${distance * 100}% - ${gaps})`;
 }
 
+function getAbilityGlyph(ability: AbilityDefinition): string {
+  return LEGACY_GLYPHS[ability.id] ?? (ability.name.slice(0, 1).toUpperCase() || '•');
+}
+
+function getAbilityColor(ability: AbilityDefinition): string {
+  return /^#[0-9a-fA-F]{6}$/.test(ability.color) ? ability.color : '#64748b';
+}
+
 export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBoardProps) {
   const phase = useGameStore((state) => state.phase);
   const previousPhase = useRef(phase);
@@ -85,12 +101,18 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
   const suppressClickUntil = useRef(0);
   const swapTimer = useRef<number | null>(null);
   const [swapAnimation, setSwapAnimation] = useState<SwapAnimation | null>(null);
+  const abilities = useMemo(() => loadAbilities(), []);
+  const abilityById = useMemo(
+    () => new Map(abilities.map((ability) => [ability.id, ability])),
+    [abilities],
+  );
+  const abilityIds = useMemo(() => abilities.map((ability) => ability.id), [abilities]);
   const board = useMemo(
-    () => new Board({ onCharge: onMatch, onAutoShuffle }),
-    [onAutoShuffle, onMatch],
+    () => new Board({ tileKinds: abilityIds, onCharge: onMatch, onAutoShuffle }),
+    [abilityIds, onAutoShuffle, onMatch],
   );
   const snapshot = useSyncExternalStore(board.subscribe, board.getSnapshot, board.getSnapshot);
-  const inactive = disabled || phase !== 'playing';
+  const inactive = disabled || phase !== 'playing' || abilities.length === 0;
 
   useEffect(() => () => {
     if (swapTimer.current !== null) window.clearTimeout(swapTimer.current);
@@ -175,9 +197,14 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
               return <span key={`${rowIndex}:${colIndex}`} className={styles.emptyCell} />;
             }
 
+            const ability = abilityById.get(kind);
+            if (!ability) {
+              return <span key={`${rowIndex}:${colIndex}`} className={styles.emptyCell} />;
+            }
+
             const point = { row: rowIndex, col: colIndex };
             const selected = snapshot.selected?.row === rowIndex && snapshot.selected?.col === colIndex;
-            const color = `#${TILE_META[kind].color.toString(16).padStart(6, '0')}`;
+            const color = getAbilityColor(ability);
             const activeSwap = swapAnimation ?? snapshot.rollbackSwap;
             const swappingFrom = Boolean(activeSwap && samePoint(activeSwap.from, point));
             const swappingTo = Boolean(activeSwap && samePoint(activeSwap.to, point));
@@ -208,13 +235,17 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
                   ...swapStyle,
                 } as CSSProperties}
                 disabled={inactive || snapshot.locked}
-                aria-label={TILE_META[kind].label}
+                aria-label={ability.name}
                 onClick={() => handleClick(point)}
                 onPointerDown={(event) => handlePointerDown(event, point)}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
               >
-                {TILE_META[kind].glyph}
+                {ability.image?.src ? (
+                  <img className={styles.tileImage} src={ability.image.src} alt="" />
+                ) : (
+                  getAbilityGlyph(ability)
+                )}
               </button>
             );
           }),

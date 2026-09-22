@@ -1,3 +1,4 @@
+import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits } from '../../editor/units/unitStorage';
 import styles from './EditorsScreen.module.css';
@@ -5,11 +6,13 @@ import styles from './EditorsScreen.module.css';
 type EditorsScreenProps = {
   onBack: () => void;
   onOpenDamageSources: () => void;
+  onOpenAbilities: () => void;
   onOpenUnits: () => void;
 };
 
-export function EditorsScreen({ onBack, onOpenDamageSources, onOpenUnits }: EditorsScreenProps) {
+export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, onOpenUnits }: EditorsScreenProps) {
   const damageSourcesCount = loadDamageSources().length;
+  const abilitiesCount = loadAbilities().length;
   const unitsCount = loadUnits().length;
 
   return (
@@ -31,6 +34,13 @@ export function EditorsScreen({ onBack, onOpenDamageSources, onOpenUnits }: Edit
           <strong>Редактор источников урона</strong>
           <span>ID, название, описание, изображение и цвет источников урона.</span>
           <small>Источников: {damageSourcesCount}</small>
+        </button>
+
+        <button className={styles.card} type="button" onClick={onOpenAbilities}>
+          <span className={styles.cardIcon} aria-hidden="true">✨</span>
+          <strong>Редактор способностей</strong>
+          <span>Тип эффекта, цвет, изображение, цели и параметры способностей.</span>
+          <small>Способностей: {abilitiesCount}</small>
         </button>
 
         <button className={styles.card} type="button" onClick={onOpenUnits}>

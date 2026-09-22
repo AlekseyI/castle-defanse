@@ -13,6 +13,7 @@ export interface EffectBounds {
 export interface SpellEffectOptions {
   source?: EffectPoint;
   targets?: EffectPoint[];
+  areaHeightPercent?: number;
 }
 
 export interface BattleEffect {

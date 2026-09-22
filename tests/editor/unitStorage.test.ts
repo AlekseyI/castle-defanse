@@ -27,6 +27,7 @@ describe('unitStorage', () => {
         hp: 100,
         speed: 20,
         damage: 10,
+        coinsOnDeath: 4,
         damageProtection: { fire: -100 },
       },
     ];
@@ -34,6 +35,23 @@ describe('unitStorage', () => {
     persistUnits(units);
 
     expect(loadUnits()).toEqual(units);
+  });
+
+  it('rejects saved units without coinsOnDeath', () => {
+    installLocalStorage();
+    window.localStorage.setItem('game.units.v5', JSON.stringify([
+      {
+        id: 'legacy_unit',
+        name: 'Старый юнит',
+        hp: 100,
+        speed: 20,
+        damage: 10,
+      },
+    ]));
+
+    const loaded = loadUnits();
+    expect(loaded.map((unit) => unit.id)).toEqual(DEFAULT_UNITS.map((unit) => unit.id));
+    expect(loaded.some((unit) => unit.id === 'legacy_unit')).toBe(false);
   });
 
   it('rejects saved protection values below -100%', () => {
@@ -45,6 +63,7 @@ describe('unitStorage', () => {
         hp: 100,
         speed: 20,
         damage: 10,
+        coinsOnDeath: 1,
         damageProtection: { fire: -101 },
       },
     ]);

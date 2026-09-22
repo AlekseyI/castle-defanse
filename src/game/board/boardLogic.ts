@@ -1,4 +1,4 @@
-import { BOARD_SIZE, TILE_KINDS } from '../config';
+import { BOARD_SIZE } from '../config';
 import type { Cell, GridPoint, MatchRun, TileKind } from '../types';
 
 export function areAdjacent(a: GridPoint, b: GridPoint) {
@@ -81,7 +81,11 @@ export function hasPossibleMove(grid: Cell[][]) {
   return false;
 }
 
-export function collapseAndRefill(grid: Cell[][], random: () => number = Math.random) {
+export function collapseAndRefill(
+  grid: Cell[][],
+  tileKinds: TileKind[],
+  random: () => number = Math.random,
+) {
   const rowCount = grid.length;
   const colCount = grid[0]?.length ?? 0;
   const fallDistances = Array.from(
@@ -106,7 +110,7 @@ export function collapseAndRefill(grid: Cell[][], random: () => number = Math.ra
         grid[row][col] = existing.kind;
         fallDistances[row][col] = row - existing.sourceRow;
       } else {
-        grid[row][col] = randomKind(random);
+        grid[row][col] = randomKind(tileKinds, random);
         fallDistances[row][col] = refillCount;
       }
     }
@@ -115,7 +119,14 @@ export function collapseAndRefill(grid: Cell[][], random: () => number = Math.ra
   return fallDistances;
 }
 
-export function generatePlayableGrid(random: () => number = Math.random): Cell[][] {
+export function generatePlayableGrid(
+  tileKinds: TileKind[],
+  random: () => number = Math.random,
+): Cell[][] {
+  if (tileKinds.length < 3) {
+    return Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => null));
+  }
+
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const candidate: Cell[][] = Array.from({ length: BOARD_SIZE }, () =>
       Array.from({ length: BOARD_SIZE }, () => null),
@@ -135,17 +146,19 @@ export function generatePlayableGrid(random: () => number = Math.random): Cell[]
           if (value) blocked.add(value);
         }
 
-        const choices = TILE_KINDS.filter((kind) => !blocked.has(kind));
-        candidate[row][col] = choices[Math.floor(random() * choices.length)];
+        const choices = tileKinds.filter((kind) => !blocked.has(kind));
+        const source = choices.length > 0 ? choices : tileKinds;
+        candidate[row][col] = source[Math.floor(random() * source.length)];
       }
     }
 
-    if (hasPossibleMove(candidate)) return candidate;
+    if (findMatchRuns(candidate).length === 0 && hasPossibleMove(candidate)) return candidate;
   }
 
   throw new Error('Could not generate a playable board');
 }
 
-function randomKind(random: () => number) {
-  return TILE_KINDS[Math.floor(random() * TILE_KINDS.length)];
+function randomKind(tileKinds: TileKind[], random: () => number): TileKind | null {
+  if (tileKinds.length === 0) return null;
+  return tileKinds[Math.floor(random() * tileKinds.length)];
 }

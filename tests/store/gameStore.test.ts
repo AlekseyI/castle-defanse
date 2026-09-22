@@ -10,12 +10,12 @@ describe('gameStore', () => {
   beforeEach(() => {
     useGameStore.setState({ coins: 0 });
     useGameStore.getState().setAutoCastMatches(false);
-    useGameStore.getState().reset(3);
+    useGameStore.getState().reset(3, ['fire', 'ice', 'lightning', 'shield']);
   });
 
   it('stores the automatic match casting preference across battle resets', () => {
     useGameStore.getState().setAutoCastMatches(true);
-    useGameStore.getState().reset(5);
+    useGameStore.getState().reset(5, ['fire', 'ice', 'lightning', 'shield']);
 
     expect(useGameStore.getState().autoCastMatches).toBe(true);
   });
@@ -41,6 +41,14 @@ describe('gameStore', () => {
     expect(cast).toHaveBeenNthCalledWith(2, 'ice');
   });
 
+
+  it('initializes and tracks charges for configured ability ids', () => {
+    useGameStore.getState().reset(3, ['fire', 'meteor']);
+    useGameStore.getState().addCharge('meteor', 2);
+
+    expect(useGameStore.getState().charges).toEqual({ fire: 0, meteor: 2 });
+  });
+
   it('caps accumulated spell charges at MAX_CHARGES', () => {
     const store = useGameStore.getState();
     store.addCharge('fire', MAX_CHARGES + 10);
@@ -60,18 +68,18 @@ describe('gameStore', () => {
     expect(useGameStore.getState().charges.ice).toBe(1);
   });
 
-  it('awards one coin for every defeated enemy', () => {
-    useGameStore.getState().addKill();
-    useGameStore.getState().addKill();
+  it('awards the configured number of coins for defeated enemies', () => {
+    useGameStore.getState().addKill(3);
+    useGameStore.getState().addKill(5);
 
     const state = useGameStore.getState();
     expect(state.kills).toBe(2);
-    expect(state.coins).toBe(2);
+    expect(state.coins).toBe(8);
   });
 
   it('keeps earned coins when a battle is reset', () => {
-    useGameStore.getState().addKill();
-    useGameStore.getState().reset(5);
+    useGameStore.getState().addKill(1);
+    useGameStore.getState().reset(5, ['fire', 'ice', 'lightning', 'shield']);
 
     const state = useGameStore.getState();
     expect(state.kills).toBe(0);
@@ -96,9 +104,9 @@ describe('gameStore', () => {
     useGameStore.getState().addCharge('lightning', 3);
     useGameStore.getState().damageCastle(25);
     useGameStore.getState().setWave(2);
-    useGameStore.getState().addKill();
+    useGameStore.getState().addKill(1);
 
-    useGameStore.getState().reset(5);
+    useGameStore.getState().reset(5, ['fire', 'ice', 'lightning', 'shield']);
     const state = useGameStore.getState();
 
     expect(state.castleHp).toBe(100);

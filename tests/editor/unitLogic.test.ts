@@ -13,6 +13,7 @@ const goblin: UnitDefinition = {
   hp: 100,
   speed: 40,
   damage: 10,
+  coinsOnDeath: 1,
   image: {
     name: 'goblin.png',
     src: 'data:image/png;base64,goblin',
@@ -27,6 +28,7 @@ describe('unitLogic', () => {
       hp: 180,
       speed: 35,
       damage: 24,
+      coinsOnDeath: 7,
       damageProtection: {
         ' FIRE ': 25,
         ' ICE ': -50,
@@ -42,6 +44,7 @@ describe('unitLogic', () => {
       hp: 180,
       speed: 35,
       damage: 24,
+      coinsOnDeath: 7,
       damageProtection: {
         fire: 25,
         ice: -50,
@@ -62,6 +65,7 @@ describe('unitLogic', () => {
         hp: 0,
         speed: -1,
         damage: Number.NaN,
+        coinsOnDeath: -1,
       },
       [goblin],
     );
@@ -71,6 +75,7 @@ describe('unitLogic', () => {
     expect(result.errors.hp).toBeTruthy();
     expect(result.errors.speed).toBeTruthy();
     expect(result.errors.damage).toBeTruthy();
+    expect(result.errors.coinsOnDeath).toBeTruthy();
   });
 
   it('accepts vulnerability down to -100% and rejects values outside the -100..100 range', () => {
@@ -133,7 +138,7 @@ describe('unitLogic', () => {
   });
 
   it('creates, updates and deletes units without changing unrelated records', () => {
-    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18 };
+    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3 };
     const created = saveUnit([goblin], orc);
     const updated = saveUnit(created, { ...goblin, hp: 120 }, 'goblin');
     const deleted = deleteUnit(updated, 'orc');
