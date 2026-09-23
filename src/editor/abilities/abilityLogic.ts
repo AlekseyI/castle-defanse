@@ -5,6 +5,7 @@ import type {
   AbilityEffectType,
   AbilityTarget,
   AbilityTargetType,
+  AbilityVisualEffect,
 } from './types';
 
 export interface AbilityValidationResult {
@@ -15,40 +16,26 @@ export interface AbilityValidationResult {
 const ABILITY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const COUNT_TARGETS = new Set<AbilityTargetType>(['nearest-enemies', 'random-enemies']);
-const ALL_TARGETS: AbilityTargetType[] = ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle'];
 const DEFAULT_AOE_HEIGHT_PERCENT = 50;
 const DEFAULT_COLOR = '#64748b';
+const DEFAULT_CRITICAL_MULTIPLIER = 1.5;
+const VISUAL_EFFECTS = new Set<AbilityVisualEffect>(['none', 'fire', 'ice', 'lightning', 'heal']);
 
 const EFFECT_TARGETS: Record<AbilityEffectType, AbilityTargetType[]> = {
   damage: ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle'],
+  'periodic-damage': ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies'],
   slow: ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies'],
   heal: ['castle'],
 };
 
-export function getAllowedTargets(effectTypes: AbilityEffectType[]): AbilityTargetType[] {
-  const uniqueTypes = [...new Set(effectTypes)];
-  if (uniqueTypes.length === 0) return ALL_TARGETS;
-
-  return ALL_TARGETS.filter((target) => uniqueTypes.every((type) => EFFECT_TARGETS[type].includes(target)));
+export function getAllowedTargets(effectType: AbilityEffectType): AbilityTargetType[] {
+  return [...EFFECT_TARGETS[effectType]];
 }
 
-function defaultEffect(type: AbilityEffectType, damageSources: DamageSource[]): AbilityEffect {
-  if (type === 'damage') {
-    return { type, amount: 0, damageSourceId: damageSources[0]?.id ?? '' };
-  }
-  if (type === 'slow') {
-    return { type, slowPercent: 0, duration: 0 };
-  }
-  return { type, amount: 0 };
-}
-
-function defaultTarget(effectTypes: AbilityEffectType[]): AbilityTarget {
-  const allowedTargets = getAllowedTargets(effectTypes);
-  if (allowedTargets.includes('castle') && effectTypes.includes('heal')) return { type: 'castle' };
-  if (allowedTargets.includes('all-enemies') && effectTypes.includes('slow')) return { type: 'all-enemies' };
-  if (allowedTargets.includes('nearest-enemies')) return { type: 'nearest-enemies', count: 1 };
-  if (allowedTargets.includes('area-enemies')) return { type: 'area-enemies', areaHeightPercent: DEFAULT_AOE_HEIGHT_PERCENT };
-  return { type: allowedTargets[0] ?? 'nearest-enemies' };
+function defaultTarget(type: AbilityEffectType): AbilityTarget {
+  if (type === 'heal') return { type: 'castle' };
+  if (type === 'slow') return { type: 'all-enemies' };
+  return { type: 'nearest-enemies', count: 1 };
 }
 
 function targetForType(type: AbilityTargetType, previous: AbilityTarget): AbilityTarget {
@@ -61,14 +48,64 @@ function targetForType(type: AbilityTargetType, previous: AbilityTarget): Abilit
   return { type };
 }
 
+function normalizeTarget(target: AbilityTarget): AbilityTarget {
+  if (COUNT_TARGETS.has(target.type)) {
+    return { type: target.type, count: target.count ?? 1 };
+  }
+  if (target.type === 'area-enemies') {
+    return {
+      type: target.type,
+      areaHeightPercent: target.areaHeightPercent ?? DEFAULT_AOE_HEIGHT_PERCENT,
+    };
+  }
+  return { type: target.type };
+}
+
+function defaultEffect(
+  type: AbilityEffectType,
+  damageSources: DamageSource[],
+  effectColor = DEFAULT_COLOR,
+): AbilityEffect {
+  if (type === 'damage') {
+    return {
+      type,
+      amount: 0,
+      damageSourceId: damageSources[0]?.id ?? '',
+      criticalChancePercent: 0,
+      criticalMultiplier: DEFAULT_CRITICAL_MULTIPLIER,
+      target: defaultTarget(type),
+    };
+  }
+  if (type === 'periodic-damage') {
+    return {
+      type,
+      chancePercent: 100,
+      amount: 0,
+      duration: 1,
+      criticalChancePercent: 0,
+      criticalMultiplier: DEFAULT_CRITICAL_MULTIPLIER,
+      visualColor: effectColor,
+      target: defaultTarget(type),
+    };
+  }
+  if (type === 'slow') {
+    return {
+      type,
+      slowPercent: 0,
+      duration: 0,
+      target: defaultTarget(type),
+    };
+  }
+  return { type, amount: 0, target: defaultTarget(type) };
+}
+
 export function createEmptyAbility(damageSources: DamageSource[]): AbilityDefinition {
-  const effects: AbilityEffect[] = [defaultEffect('damage', damageSources)];
   return {
     id: '',
     name: '',
-    effects,
+    effects: [defaultEffect('damage', damageSources)],
+    visualEffect: 'none',
     color: DEFAULT_COLOR,
-    target: defaultTarget(effects.map((effect) => effect.type)),
   };
 }
 
@@ -79,20 +116,24 @@ export function changeAbilityEffectTypes(
 ): AbilityDefinition {
   const uniqueTypes = [...new Set(effectTypes)];
   const effects = uniqueTypes.map((type) => (
-    ability.effects.find((effect) => effect.type === type) ?? defaultEffect(type, damageSources)
+    ability.effects.find((effect) => effect.type === type) ?? defaultEffect(type, damageSources, ability.color)
   ));
-  const allowedTargets = getAllowedTargets(uniqueTypes);
-  const target = allowedTargets.includes(ability.target.type)
-    ? { ...ability.target }
-    : defaultTarget(uniqueTypes);
 
-  return { ...ability, effects, target };
+  return { ...ability, effects };
 }
 
-export function changeAbilityTarget(ability: AbilityDefinition, type: AbilityTargetType): AbilityDefinition {
+export function changeAbilityEffectTarget(
+  ability: AbilityDefinition,
+  effectType: AbilityEffectType,
+  targetType: AbilityTargetType,
+): AbilityDefinition {
   return {
     ...ability,
-    target: targetForType(type, ability.target),
+    effects: ability.effects.map((effect) => (
+      effect.type === effectType
+        ? { ...effect, target: targetForType(targetType, effect.target) }
+        : effect
+    )),
   };
 }
 
@@ -102,6 +143,21 @@ function normalizeEffect(effect: AbilityEffect): AbilityEffect {
       type: 'damage',
       amount: effect.amount ?? 0,
       damageSourceId: effect.damageSourceId?.trim() ?? '',
+      criticalChancePercent: effect.criticalChancePercent ?? 0,
+      criticalMultiplier: effect.criticalMultiplier ?? DEFAULT_CRITICAL_MULTIPLIER,
+      target: normalizeTarget(effect.target),
+    };
+  }
+  if (effect.type === 'periodic-damage') {
+    return {
+      type: 'periodic-damage',
+      chancePercent: effect.chancePercent ?? 0,
+      amount: effect.amount ?? 0,
+      duration: effect.duration ?? 0,
+      criticalChancePercent: effect.criticalChancePercent ?? 0,
+      criticalMultiplier: effect.criticalMultiplier ?? DEFAULT_CRITICAL_MULTIPLIER,
+      visualColor: effect.visualColor?.trim().toLowerCase() ?? '',
+      target: normalizeTarget(effect.target),
     };
   }
   if (effect.type === 'slow') {
@@ -109,9 +165,14 @@ function normalizeEffect(effect: AbilityEffect): AbilityEffect {
       type: 'slow',
       slowPercent: effect.slowPercent ?? 0,
       duration: effect.duration ?? 0,
+      target: normalizeTarget(effect.target),
     };
   }
-  return { type: 'heal', amount: effect.amount ?? 0 };
+  return {
+    type: 'heal',
+    amount: effect.amount ?? 0,
+    target: normalizeTarget(effect.target),
+  };
 }
 
 export function normalizeAbility(ability: AbilityDefinition): AbilityDefinition {
@@ -120,27 +181,45 @@ export function normalizeAbility(ability: AbilityDefinition): AbilityDefinition 
     if (!effects.some((item) => item.type === effect.type)) effects.push(normalizeEffect(effect));
   }
 
-  let target: AbilityTarget = { type: ability.target.type };
-  if (COUNT_TARGETS.has(ability.target.type)) {
-    target = { type: ability.target.type, count: ability.target.count ?? 1 };
-  } else if (ability.target.type === 'area-enemies') {
-    target = {
-      type: ability.target.type,
-      areaHeightPercent: ability.target.areaHeightPercent ?? DEFAULT_AOE_HEIGHT_PERCENT,
-    };
-  }
-
   return {
     id: ability.id.trim().toLowerCase(),
     name: ability.name.trim(),
     description: ability.description?.trim() || undefined,
     effects,
+    visualEffect: ability.visualEffect,
     color: ability.color.trim().toLowerCase(),
     image: ability.image?.src
       ? { name: ability.image.name.trim(), src: ability.image.src }
       : undefined,
-    target,
   };
+}
+
+function validateTarget(
+  effectType: AbilityEffectType,
+  target: AbilityTarget,
+  errors: Record<string, string>,
+) {
+  const prefix = effectType;
+  const allowedTargets = getAllowedTargets(effectType);
+
+  if (!allowedTargets.includes(target.type)) {
+    errors[`${prefix}Target`] = 'Этот тип цели недоступен для эффекта.';
+    return;
+  }
+
+  if (COUNT_TARGETS.has(target.type)) {
+    const count = target.count;
+    if (!Number.isInteger(count) || (count ?? 0) < 1) {
+      errors[`${prefix}TargetCount`] = 'Количество целей должно быть целым числом от 1.';
+    }
+  }
+
+  if (target.type === 'area-enemies') {
+    const heightPercent = target.areaHeightPercent;
+    if (!Number.isFinite(heightPercent) || (heightPercent ?? 0) < 1 || (heightPercent ?? 101) > 100) {
+      errors[`${prefix}AreaHeightPercent`] = 'Высота области должна быть от 1 до 100%.';
+    }
+  }
 }
 
 export function validateAbility(
@@ -151,8 +230,6 @@ export function validateAbility(
 ): AbilityValidationResult {
   const normalized = normalizeAbility(ability);
   const errors: Record<string, string> = {};
-  const effectTypes = normalized.effects.map((effect) => effect.type);
-  const allowedTargets = getAllowedTargets(effectTypes);
 
   if (!normalized.id) {
     errors.id = 'Укажите ID.';
@@ -164,38 +241,43 @@ export function validateAbility(
 
   if (!normalized.name) errors.name = 'Укажите название.';
   if (!HEX_COLOR_PATTERN.test(normalized.color)) errors.color = 'Укажите цвет в формате #RRGGBB.';
-
-  if (normalized.effects.length === 0) {
-    errors.effects = 'Выберите хотя бы один тип эффекта.';
-  } else if (allowedTargets.length === 0) {
-    errors.effects = 'У выбранных эффектов нет общей доступной цели.';
-  }
-
-  if (normalized.effects.length > 0 && !allowedTargets.includes(normalized.target.type)) {
-    errors.target = 'Этот тип цели недоступен для выбранных эффектов.';
-  }
-
-  if (COUNT_TARGETS.has(normalized.target.type)) {
-    const count = normalized.target.count;
-    if (!Number.isInteger(count) || (count ?? 0) < 1) {
-      errors.targetCount = 'Количество целей должно быть целым числом от 1.';
-    }
-  }
-
-  if (normalized.target.type === 'area-enemies') {
-    const heightPercent = normalized.target.areaHeightPercent;
-    if (!Number.isFinite(heightPercent) || (heightPercent ?? 0) < 1 || (heightPercent ?? 101) > 100) {
-      errors.areaHeightPercent = 'Высота области должна быть от 1 до 100%.';
-    }
-  }
+  if (!VISUAL_EFFECTS.has(normalized.visualEffect)) errors.visualEffect = 'Выберите визуальный эффект.';
+  if (normalized.effects.length === 0) errors.effects = 'Выберите хотя бы один тип эффекта.';
 
   for (const effect of normalized.effects) {
+    validateTarget(effect.type, effect.target, errors);
+
     if (effect.type === 'damage') {
       if (!Number.isFinite(effect.amount) || effect.amount < 0) {
         errors.damageAmount = 'Урон должен быть числом от 0.';
       }
       if (!damageSources.some((source) => source.id === effect.damageSourceId)) {
         errors.damageSourceId = 'Выберите существующий источник урона.';
+      }
+      if (!Number.isFinite(effect.criticalChancePercent) || effect.criticalChancePercent < 0 || effect.criticalChancePercent > 100) {
+        errors.damageCriticalChancePercent = 'Шанс крит. урона должен быть от 0 до 100%.';
+      }
+      if (!Number.isFinite(effect.criticalMultiplier) || effect.criticalMultiplier < 1) {
+        errors.damageCriticalMultiplier = 'Множитель крит. урона должен быть числом от 1.';
+      }
+    } else if (effect.type === 'periodic-damage') {
+      if (!Number.isFinite(effect.chancePercent) || effect.chancePercent < 0 || effect.chancePercent > 100) {
+        errors.periodicDamageChancePercent = 'Шанс должен быть от 0 до 100%.';
+      }
+      if (!Number.isFinite(effect.amount) || effect.amount < 0) {
+        errors.periodicDamageAmount = 'Урон должен быть числом от 0.';
+      }
+      if (!Number.isFinite(effect.duration) || effect.duration <= 0) {
+        errors.periodicDamageDuration = 'Длительность должна быть числом больше 0.';
+      }
+      if (!Number.isFinite(effect.criticalChancePercent) || effect.criticalChancePercent < 0 || effect.criticalChancePercent > 100) {
+        errors.periodicDamageCriticalChancePercent = 'Шанс крит. урона должен быть от 0 до 100%.';
+      }
+      if (!Number.isFinite(effect.criticalMultiplier) || effect.criticalMultiplier < 1) {
+        errors.periodicDamageCriticalMultiplier = 'Множитель крит. урона должен быть числом от 1.';
+      }
+      if (!HEX_COLOR_PATTERN.test(effect.visualColor)) {
+        errors.periodicDamageVisualColor = 'Укажите цвет эффекта в формате #RRGGBB.';
       }
     } else if (effect.type === 'slow') {
       if (!Number.isFinite(effect.slowPercent) || effect.slowPercent < 0 || effect.slowPercent > 100) {

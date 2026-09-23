@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getEnemySpeedScale } from '../../src/game/movementLogic';
+import { getEnemySpawnY, getEnemySpeedScale } from '../../src/game/movementLogic';
 
 describe('getEnemySpeedScale', () => {
   it('keeps the configured enemy speed on non-compact layouts', () => {
@@ -20,5 +20,15 @@ describe('getEnemySpeedScale', () => {
 
   it('caps compact enemy speed even when the path is long', () => {
     expect(getEnemySpeedScale(360, true)).toBe(0.65);
+  });
+});
+
+describe('getEnemySpawnY', () => {
+  it('places the whole enemy visual, including the hp bar, above the visible top edge', () => {
+    const normalVisualBottomExtent = 24 + 6;
+    const bossVisualBottomExtent = 37 + 6;
+
+    expect(getEnemySpawnY(normalVisualBottomExtent) + normalVisualBottomExtent).toBeLessThan(0);
+    expect(getEnemySpawnY(bossVisualBottomExtent) + bossVisualBottomExtent).toBeLessThan(0);
   });
 });

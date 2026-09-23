@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import {
   changeAbilityEffectTypes,
-  changeAbilityTarget,
+  changeAbilityEffectTarget,
   createEmptyAbility,
   deleteAbility,
   getAllowedTargets,
@@ -13,11 +13,14 @@ import {
 import { loadAbilities, persistAbilities } from '../../editor/abilities/abilityStorage';
 import type {
   AbilityDefinition,
+  AbilityEffect,
   AbilityEffectType,
   AbilityTargetType,
   DamageAbilityEffect,
   HealAbilityEffect,
+  PeriodicDamageAbilityEffect,
   SlowAbilityEffect,
+  AbilityVisualEffect,
 } from '../../editor/abilities/types';
 import styles from './AbilitiesEditor.module.css';
 
@@ -28,7 +31,16 @@ type AbilitiesEditorProps = {
 
 const EFFECT_TYPE_LABELS: Record<AbilityEffectType, string> = {
   damage: 'Урон',
+  'periodic-damage': 'Периодический урон',
   slow: 'Замедление',
+  heal: 'Лечение',
+};
+
+const VISUAL_EFFECT_LABELS: Record<AbilityVisualEffect, string> = {
+  none: 'Без эффекта',
+  fire: 'Огненная стена',
+  ice: 'Заморозка',
+  lightning: 'Удар молнии',
   heal: 'Лечение',
 };
 
@@ -51,8 +63,7 @@ function cloneAbility(ability: AbilityDefinition): AbilityDefinition {
   return {
     ...ability,
     image: ability.image ? { ...ability.image } : undefined,
-    effects: ability.effects.map((effect) => ({ ...effect })),
-    target: { ...ability.target },
+    effects: ability.effects.map((effect) => ({ ...effect, target: { ...effect.target } })),
   };
 }
 
@@ -184,6 +195,84 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Не удалось загрузить изображение.');
     }
+  };
+
+  const renderTargetFields = (effect: AbilityEffect) => {
+    const targetError = validation.errors[`${effect.type}Target`];
+    const countError = validation.errors[`${effect.type}TargetCount`];
+    const areaHeightError = validation.errors[`${effect.type}AreaHeightPercent`];
+
+    return (
+      <>
+        <label className={styles.field}>
+          <span>Тип цели</span>
+          <select
+            value={effect.target.type}
+            aria-invalid={Boolean(targetError)}
+            onChange={(event) => setDraft((current) => changeAbilityEffectTarget(
+              current,
+              effect.type,
+              event.target.value as AbilityTargetType,
+            ))}
+          >
+            {getAllowedTargets(effect.type).map((target) => (
+              <option key={target} value={target}>{TARGET_LABELS[target]}</option>
+            ))}
+          </select>
+          {targetError && <small className={styles.fieldError}>{targetError}</small>}
+        </label>
+
+        {(effect.target.type === 'nearest-enemies' || effect.target.type === 'random-enemies') && (
+          <label className={styles.field}>
+            <span>Количество целей</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={effect.target.count ?? 1}
+              aria-invalid={Boolean(countError)}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                effects: current.effects.map((item) => item.type === effect.type
+                  ? {
+                    ...item,
+                    target: { ...item.target, count: inputNumber(event.target.value) },
+                  }
+                  : item),
+              }))}
+            />
+            {countError && <small className={styles.fieldError}>{countError}</small>}
+          </label>
+        )}
+
+        {effect.target.type === 'area-enemies' && (
+          <label className={styles.field}>
+            <span>Высота области, %</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              value={effect.target.areaHeightPercent ?? 50}
+              aria-invalid={Boolean(areaHeightError)}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                effects: current.effects.map((item) => item.type === effect.type
+                  ? {
+                    ...item,
+                    target: {
+                      ...item.target,
+                      areaHeightPercent: inputNumber(event.target.value),
+                    },
+                  }
+                  : item),
+              }))}
+            />
+            {areaHeightError && <small className={styles.fieldError}>{areaHeightError}</small>}
+          </label>
+        )}
+      </>
+    );
   };
 
   const hasEditor = isCreating || selectedAbility !== null;
@@ -343,6 +432,27 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                   {validation.errors.effects && <small className={styles.fieldError}>{validation.errors.effects}</small>}
                 </div>
 
+                <label className={styles.field}>
+                  <span>Визуальный эффект</span>
+                  <select
+                    value={draft.visualEffect}
+                    aria-invalid={Boolean(validation.errors.visualEffect)}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      visualEffect: event.target.value as AbilityVisualEffect,
+                    }))}
+                  >
+                    {(Object.keys(VISUAL_EFFECT_LABELS) as AbilityVisualEffect[]).map((visualEffect) => (
+                      <option key={visualEffect} value={visualEffect}>
+                        {VISUAL_EFFECT_LABELS[visualEffect]}
+                      </option>
+                    ))}
+                  </select>
+                  {validation.errors.visualEffect && (
+                    <small className={styles.fieldError}>{validation.errors.visualEffect}</small>
+                  )}
+                </label>
+
                 <label className={`${styles.field} ${styles.fullRow}`}>
                   <span>Описание</span>
                   <textarea
@@ -351,70 +461,6 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                     placeholder="Что делает способность"
                   />
                 </label>
-              </div>
-            </div>
-
-            <div className={styles.formSection}>
-              <h2>Цель</h2>
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Тип цели</span>
-                  <select
-                    value={draft.target.type}
-                    aria-invalid={Boolean(validation.errors.target)}
-                    onChange={(event) => setDraft((current) => changeAbilityTarget(
-                      current,
-                      event.target.value as AbilityTargetType,
-                    ))}
-                  >
-                    {getAllowedTargets(getEffectTypes(draft)).map((target) => (
-                      <option key={target} value={target}>{TARGET_LABELS[target]}</option>
-                    ))}
-                  </select>
-                  {validation.errors.target && <small className={styles.fieldError}>{validation.errors.target}</small>}
-                </label>
-
-                {(draft.target.type === 'nearest-enemies' || draft.target.type === 'random-enemies') && (
-                  <label className={styles.field}>
-                    <span>Количество целей</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={draft.target.count ?? 1}
-                      aria-invalid={Boolean(validation.errors.targetCount)}
-                      onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        target: { ...current.target, count: inputNumber(event.target.value) },
-                      }))}
-                    />
-                    {validation.errors.targetCount && <small className={styles.fieldError}>{validation.errors.targetCount}</small>}
-                  </label>
-                )}
-
-                {draft.target.type === 'area-enemies' && (
-                  <label className={styles.field}>
-                    <span>Высота области, %</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      step="1"
-                      value={draft.target.areaHeightPercent ?? 50}
-                      aria-invalid={Boolean(validation.errors.areaHeightPercent)}
-                      onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        target: {
-                          ...current.target,
-                          areaHeightPercent: inputNumber(event.target.value),
-                        },
-                      }))}
-                    />
-                    {validation.errors.areaHeightPercent && (
-                      <small className={styles.fieldError}>{validation.errors.areaHeightPercent}</small>
-                    )}
-                  </label>
-                )}
               </div>
             </div>
 
@@ -428,6 +474,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                       <div key="damage" className={styles.effectBlock}>
                         <h3>Урон</h3>
                         <div className={styles.formGrid}>
+                          {renderTargetFields(effect)}
                           <label className={styles.field}>
                             <span>Урон</span>
                             <input
@@ -461,6 +508,190 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                             </select>
                             {validation.errors.damageSourceId && <small className={styles.fieldError}>{validation.errors.damageSourceId}</small>}
                           </label>
+
+                          <label className={styles.field}>
+                            <span>Шанс крит. урона, %</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={effect.criticalChancePercent}
+                              aria-invalid={Boolean(validation.errors.damageCriticalChancePercent)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'damage'
+                                  ? { ...item, criticalChancePercent: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.damageCriticalChancePercent && (
+                              <small className={styles.fieldError}>{validation.errors.damageCriticalChancePercent}</small>
+                            )}
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Множитель крит. урона</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="0.1"
+                              value={effect.criticalMultiplier}
+                              aria-invalid={Boolean(validation.errors.damageCriticalMultiplier)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'damage'
+                                  ? { ...item, criticalMultiplier: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.damageCriticalMultiplier && (
+                              <small className={styles.fieldError}>{validation.errors.damageCriticalMultiplier}</small>
+                            )}
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (selectedEffect.type === 'periodic-damage') {
+                    const effect = selectedEffect as PeriodicDamageAbilityEffect;
+                    return (
+                      <div key="periodic-damage" className={styles.effectBlock}>
+                        <h3>Периодический урон</h3>
+                        <div className={styles.formGrid}>
+                          {renderTargetFields(effect)}
+                          <label className={styles.field}>
+                            <span>Шанс, %</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={effect.chancePercent}
+                              aria-invalid={Boolean(validation.errors.periodicDamageChancePercent)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                  ? { ...item, chancePercent: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.periodicDamageChancePercent && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageChancePercent}</small>
+                            )}
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Урон</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={effect.amount}
+                              aria-invalid={Boolean(validation.errors.periodicDamageAmount)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                  ? { ...item, amount: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.periodicDamageAmount && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageAmount}</small>
+                            )}
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Длительность, сек.</span>
+                            <input
+                              type="number"
+                              min="0.1"
+                              step="0.1"
+                              value={effect.duration}
+                              aria-invalid={Boolean(validation.errors.periodicDamageDuration)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                  ? { ...item, duration: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.periodicDamageDuration && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageDuration}</small>
+                            )}
+                          </label>
+
+
+                          <label className={styles.field}>
+                            <span>Шанс крит. урона, %</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={effect.criticalChancePercent}
+                              aria-invalid={Boolean(validation.errors.periodicDamageCriticalChancePercent)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                  ? { ...item, criticalChancePercent: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.periodicDamageCriticalChancePercent && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageCriticalChancePercent}</small>
+                            )}
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Множитель крит. урона</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="0.1"
+                              value={effect.criticalMultiplier}
+                              aria-invalid={Boolean(validation.errors.periodicDamageCriticalMultiplier)}
+                              onChange={(event) => setDraft((current) => ({
+                                ...current,
+                                effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                  ? { ...item, criticalMultiplier: inputNumber(event.target.value) }
+                                  : item),
+                              }))}
+                            />
+                            {validation.errors.periodicDamageCriticalMultiplier && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageCriticalMultiplier}</small>
+                            )}
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Цвет визуального эффекта</span>
+                            <div className={styles.colorRow}>
+                              <input
+                                className={styles.colorPicker}
+                                type="color"
+                                value={/^#[0-9a-fA-F]{6}$/.test(effect.visualColor) ? effect.visualColor : '#64748b'}
+                                onChange={(event) => setDraft((current) => ({
+                                  ...current,
+                                  effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                    ? { ...item, visualColor: event.target.value }
+                                    : item),
+                                }))}
+                              />
+                              <input
+                                value={effect.visualColor}
+                                aria-invalid={Boolean(validation.errors.periodicDamageVisualColor)}
+                                onChange={(event) => setDraft((current) => ({
+                                  ...current,
+                                  effects: current.effects.map((item) => item.type === 'periodic-damage'
+                                    ? { ...item, visualColor: event.target.value }
+                                    : item),
+                                }))}
+                                placeholder="#f97316"
+                                spellCheck={false}
+                              />
+                            </div>
+                            {validation.errors.periodicDamageVisualColor && (
+                              <small className={styles.fieldError}>{validation.errors.periodicDamageVisualColor}</small>
+                            )}
+                          </label>
                         </div>
                       </div>
                     );
@@ -472,6 +703,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                       <div key="slow" className={styles.effectBlock}>
                         <h3>Замедление</h3>
                         <div className={styles.formGrid}>
+                          {renderTargetFields(effect)}
                           <label className={styles.field}>
                             <span>Замедление, %</span>
                             <input
@@ -517,6 +749,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                     <div key="heal" className={styles.effectBlock}>
                       <h3>Лечение</h3>
                       <div className={styles.formGrid}>
+                        {renderTargetFields(effect)}
                         <label className={styles.field}>
                           <span>Лечение, HP</span>
                           <input

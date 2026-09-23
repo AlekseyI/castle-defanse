@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  changeAbilityEffectTarget,
   changeAbilityEffectTypes,
-  changeAbilityTarget,
   createEmptyAbility,
   getAllowedTargets,
   normalizeAbility,
@@ -18,87 +18,163 @@ const damageSources: DamageSource[] = [
 const fireAbility: AbilityDefinition = {
   id: 'fire',
   name: 'Огонь',
-  effects: [{ type: 'damage', amount: 55, damageSourceId: 'fire' }],
+  effects: [{
+    type: 'damage',
+    amount: 55,
+    damageSourceId: 'fire',
+    criticalChancePercent: 0,
+    criticalMultiplier: 1.5,
+    target: { type: 'nearest-enemies', count: 4 },
+  }],
+  visualEffect: 'fire',
   color: '#e9573f',
-  target: { type: 'nearest-enemies', count: 4 },
 };
 
 describe('abilityLogic', () => {
-  it('creates a damage ability with one effect by default', () => {
+  it('creates a damage ability with an independent target and no visual effect by default', () => {
     expect(createEmptyAbility(damageSources)).toEqual({
       id: '',
       name: '',
-      effects: [{ type: 'damage', amount: 0, damageSourceId: 'fire' }],
+      effects: [{
+        type: 'damage',
+        amount: 0,
+        damageSourceId: 'fire',
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        target: { type: 'nearest-enemies', count: 1 },
+      }],
+      visualEffect: 'none',
       color: '#64748b',
-      target: { type: 'nearest-enemies', count: 1 },
     });
   });
 
-  it('adds another effect without losing parameters of already selected effects', () => {
+  it('adds another effect with its own default target without changing the visual effect', () => {
     expect(changeAbilityEffectTypes(fireAbility, ['damage', 'slow'], damageSources)).toEqual({
       ...fireAbility,
       effects: [
-        { type: 'damage', amount: 55, damageSourceId: 'fire' },
-        { type: 'slow', slowPercent: 0, duration: 0 },
+        {
+          type: 'damage',
+          amount: 55,
+          damageSourceId: 'fire',
+          criticalChancePercent: 0,
+          criticalMultiplier: 1.5,
+          target: { type: 'nearest-enemies', count: 4 },
+        },
+        {
+          type: 'slow',
+          slowPercent: 0,
+          duration: 0,
+          target: { type: 'all-enemies' },
+        },
       ],
     });
   });
 
-  it('keeps only targets shared by all selected effects', () => {
-    expect(getAllowedTargets(['damage', 'slow'])).toEqual([
+  it('adds periodic damage with chance, damage and duration defaults', () => {
+    const changed = changeAbilityEffectTypes(fireAbility, ['damage', 'periodic-damage'], damageSources);
+
+    expect(changed.effects[1]).toEqual({
+      type: 'periodic-damage',
+      chancePercent: 100,
+      amount: 0,
+      duration: 1,
+      criticalChancePercent: 0,
+      criticalMultiplier: 1.5,
+      visualColor: '#e9573f',
+      target: { type: 'nearest-enemies', count: 1 },
+    });
+  });
+
+  it('keeps the selected visual when damage is added to an ice ability', () => {
+    const iceAbility: AbilityDefinition = {
+      id: 'ice',
+      name: 'Лёд',
+      effects: [{
+        type: 'slow',
+        slowPercent: 50,
+        duration: 3,
+        target: { type: 'all-enemies' },
+      }],
+      visualEffect: 'ice',
+      color: '#4ba3ff',
+    };
+
+    const changed = changeAbilityEffectTypes(iceAbility, ['slow', 'damage'], damageSources);
+    expect(changed.visualEffect).toBe('ice');
+    expect(changed.effects.map((effect) => effect.type)).toEqual(['slow', 'damage']);
+  });
+
+  it('returns targets for each effect independently', () => {
+    expect(getAllowedTargets('damage')).toEqual([
+      'nearest-enemies',
+      'random-enemies',
+      'area-enemies',
+      'all-enemies',
+      'castle',
+    ]);
+    expect(getAllowedTargets('periodic-damage')).toEqual([
       'nearest-enemies',
       'random-enemies',
       'area-enemies',
       'all-enemies',
     ]);
-    expect(getAllowedTargets(['damage', 'heal'])).toEqual(['castle']);
-    expect(getAllowedTargets(['slow', 'heal'])).toEqual([]);
+    expect(getAllowedTargets('slow')).toEqual([
+      'nearest-enemies',
+      'random-enemies',
+      'area-enemies',
+      'all-enemies',
+    ]);
+    expect(getAllowedTargets('heal')).toEqual(['castle']);
   });
 
-  it('moves to a valid common target when selected effects require it', () => {
-    expect(changeAbilityEffectTypes(fireAbility, ['damage', 'heal'], damageSources)).toEqual({
-      ...fireAbility,
+  it('changes only the target of the selected effect', () => {
+    const combo = changeAbilityEffectTypes(fireAbility, ['damage', 'heal'], damageSources);
+    const changed = changeAbilityEffectTarget(combo, 'damage', 'area-enemies');
+
+    expect(changed.effects).toEqual([
+      {
+        type: 'damage',
+        amount: 55,
+        damageSourceId: 'fire',
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        target: { type: 'area-enemies', areaHeightPercent: 50 },
+      },
+      {
+        type: 'heal',
+        amount: 0,
+        target: { type: 'castle' },
+      },
+    ]);
+  });
+
+  it('allows damage and healing in one ability with different targets', () => {
+    const combo: AbilityDefinition = {
+      id: 'combo',
+      name: 'Комбо',
       effects: [
-        { type: 'damage', amount: 55, damageSourceId: 'fire' },
-        { type: 'heal', amount: 0 },
+        {
+          type: 'damage',
+          amount: 55,
+          damageSourceId: 'fire',
+          criticalChancePercent: 0,
+          criticalMultiplier: 1.5,
+          target: { type: 'area-enemies', areaHeightPercent: 35 },
+        },
+        {
+          type: 'heal',
+          amount: 20,
+          target: { type: 'castle' },
+        },
       ],
-      target: { type: 'castle' },
-    });
-  });
-
-  it('allows AoE for damage and slow and removes target count when it is selected', () => {
-    expect(getAllowedTargets(['damage', 'slow'])).toContain('area-enemies');
-
-    expect(changeAbilityTarget(fireAbility, 'area-enemies')).toEqual({
-      ...fireAbility,
-      target: { type: 'area-enemies', areaHeightPercent: 50 },
-    });
-  });
-
-  it('validates AoE height and keeps all effects in normalized data', () => {
-    const aoe: AbilityDefinition = {
-      ...fireAbility,
-      effects: [
-        { type: 'damage', amount: 55, damageSourceId: 'fire' },
-        { type: 'slow', slowPercent: 30, duration: 2 },
-      ],
-      target: { type: 'area-enemies', areaHeightPercent: 35 },
+      visualEffect: 'fire',
+      color: '#e9573f',
     };
 
-    expect(normalizeAbility(aoe)).toEqual({
-      ...aoe,
-      target: { type: 'area-enemies', areaHeightPercent: 35 },
-    });
-    expect(validateAbility(aoe, [], damageSources).valid).toBe(true);
-
-    const invalid = validateAbility({
-      ...aoe,
-      target: { type: 'area-enemies', areaHeightPercent: 0 },
-    }, [], damageSources);
-    expect(invalid.errors.areaHeightPercent).toBeTruthy();
+    expect(validateAbility(combo, [], damageSources).valid).toBe(true);
   });
 
-  it('normalizes color, image and effect-specific values', () => {
+  it('normalizes color, image, targets and effect-specific values', () => {
     expect(normalizeAbility({
       ...fireAbility,
       id: '  FIRE_NEW  ',
@@ -107,55 +183,141 @@ describe('abilityLogic', () => {
       color: '#ABCDEF',
       image: { name: ' icon.svg ', src: 'data:image/svg+xml;base64,AAA' },
       effects: [
-        { type: 'damage', amount: 70, damageSourceId: ' fire ' },
-        { type: 'slow', slowPercent: 50, duration: 9 },
+        {
+          type: 'damage',
+          amount: 70,
+          damageSourceId: ' fire ',
+          criticalChancePercent: 25,
+          criticalMultiplier: 1.75,
+          target: { type: 'area-enemies', areaHeightPercent: 40 },
+        },
+        {
+          type: 'periodic-damage',
+          chancePercent: 35,
+          amount: 12,
+          duration: 5,
+          criticalChancePercent: 35,
+          criticalMultiplier: 1.75,
+          visualColor: ' #4BA3FF ',
+          target: { type: 'all-enemies' },
+        },
+        {
+          type: 'slow',
+          slowPercent: 50,
+          duration: 9,
+          target: { type: 'random-enemies', count: 2 },
+        },
       ],
+      visualEffect: 'ice',
     })).toEqual({
       id: 'fire_new',
       name: 'Новый огонь',
       description: 'Описание',
       effects: [
-        { type: 'damage', amount: 70, damageSourceId: 'fire' },
-        { type: 'slow', slowPercent: 50, duration: 9 },
+        {
+          type: 'damage',
+          amount: 70,
+          damageSourceId: 'fire',
+          criticalChancePercent: 25,
+          criticalMultiplier: 1.75,
+          target: { type: 'area-enemies', areaHeightPercent: 40 },
+        },
+        {
+          type: 'periodic-damage',
+          chancePercent: 35,
+          amount: 12,
+          duration: 5,
+          criticalChancePercent: 35,
+          criticalMultiplier: 1.75,
+          visualColor: '#4ba3ff',
+          target: { type: 'all-enemies' },
+        },
+        {
+          type: 'slow',
+          slowPercent: 50,
+          duration: 9,
+          target: { type: 'random-enemies', count: 2 },
+        },
       ],
+      visualEffect: 'ice',
       color: '#abcdef',
       image: { name: 'icon.svg', src: 'data:image/svg+xml;base64,AAA' },
-      target: { type: 'nearest-enemies', count: 4 },
     });
   });
 
-  it('validates every selected effect', () => {
+  it('validates parameters and targets of every selected effect', () => {
     const invalid: AbilityDefinition = {
       id: 'combo',
       name: 'Комбо',
       effects: [
-        { type: 'damage', amount: -1, damageSourceId: 'missing' },
-        { type: 'slow', slowPercent: 101, duration: -1 },
+        {
+          type: 'damage',
+          amount: -1,
+          damageSourceId: 'missing',
+          criticalChancePercent: 101,
+          criticalMultiplier: 0.5,
+          target: { type: 'random-enemies', count: 0 },
+        },
+        {
+          type: 'periodic-damage',
+          chancePercent: 101,
+          amount: -5,
+          duration: 0,
+          criticalChancePercent: 101,
+          criticalMultiplier: 0.5,
+          visualColor: 'blue',
+          target: { type: 'all-enemies' },
+        },
+        {
+          type: 'slow',
+          slowPercent: 101,
+          duration: -1,
+          target: { type: 'area-enemies', areaHeightPercent: 0 },
+        },
       ],
+      visualEffect: 'lightning',
       color: 'yellow',
-      target: { type: 'random-enemies', count: 0 },
     };
 
     const result = validateAbility(invalid, [fireAbility], damageSources);
     expect(result.errors.color).toBeTruthy();
-    expect(result.errors.targetCount).toBeTruthy();
+    expect(result.errors.damageTargetCount).toBeTruthy();
+    expect(result.errors.slowAreaHeightPercent).toBeTruthy();
     expect(result.errors.damageAmount).toBeTruthy();
     expect(result.errors.damageSourceId).toBeTruthy();
+    expect(result.errors.damageCriticalChancePercent).toBeTruthy();
+    expect(result.errors.damageCriticalMultiplier).toBeTruthy();
+    expect(result.errors.periodicDamageChancePercent).toBeTruthy();
+    expect(result.errors.periodicDamageAmount).toBeTruthy();
+    expect(result.errors.periodicDamageDuration).toBeTruthy();
+    expect(result.errors.periodicDamageCriticalChancePercent).toBeTruthy();
+    expect(result.errors.periodicDamageCriticalMultiplier).toBeTruthy();
+    expect(result.errors.periodicDamageVisualColor).toBeTruthy();
     expect(result.errors.slowPercent).toBeTruthy();
     expect(result.errors.duration).toBeTruthy();
   });
 
-  it('requires at least one effect and rejects incompatible effect combinations', () => {
+  it('requires at least one effect but does not require effects to share a target', () => {
     const withoutEffects = validateAbility({ ...fireAbility, effects: [] }, [], damageSources);
     expect(withoutEffects.errors.effects).toBeTruthy();
 
-    const incompatible = validateAbility({
+    const mixed: AbilityDefinition = {
       ...fireAbility,
       effects: [
-        { type: 'slow', slowPercent: 20, duration: 2 },
-        { type: 'heal', amount: 10 },
+        {
+          type: 'slow',
+          slowPercent: 20,
+          duration: 2,
+          target: { type: 'all-enemies' },
+        },
+        {
+          type: 'heal',
+          amount: 10,
+          target: { type: 'castle' },
+        },
       ],
-    }, [], damageSources);
-    expect(incompatible.errors.effects).toBeTruthy();
+      visualEffect: 'ice',
+    };
+    expect(validateAbility(mixed, [], damageSources).valid).toBe(true);
   });
 });

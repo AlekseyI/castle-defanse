@@ -1,15 +1,32 @@
 import { Container, Graphics, Sprite, Texture, Text, type Application } from 'pixi.js';
 import { loadAbilities } from '../editor/abilities/abilityStorage';
-import type { AbilityDefinition, AbilityTarget } from '../editor/abilities/types';
+import type { AbilityDefinition, AbilityTarget, PeriodicDamageAbilityEffect, SlowAbilityEffect } from '../editor/abilities/types';
 import { loadUnits } from '../editor/units/unitStorage';
 import type { UnitDefinition } from '../editor/units/types';
 import { WAVES } from './config';
 import type { TileKind } from './types';
-import { getEnemySpeedScale } from './movementLogic';
+import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
 import { getWaveStep } from './waveLogic';
 import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
 import { SpellEffects } from './effects/SpellEffects';
+import { PeriodicDamageAura } from './effects/PeriodicDamageAura';
+import { formatDamagePopup, resolveDamageHit } from './damageLogic';
+import {
+  advanceAreaEffect,
+  collectNewAreaTargets,
+  createActiveAreaEffect,
+  getTargetsInArea,
+  type ActiveAreaEffect,
+  type AreaAbilityEffect,
+} from './areaEffectLogic';
+import {
+  advancePeriodicDamage,
+  createActivePeriodicDamage,
+  resolvePeriodicDamageTick,
+  shouldApplyPeriodicDamage,
+  type ActivePeriodicDamage,
+} from './periodicDamageLogic';
 
 interface Enemy {
   root: Container;
@@ -26,6 +43,20 @@ interface Enemy {
   isBoss: boolean;
 }
 
+interface ActiveBattleAreaEffect extends ActiveAreaEffect<Enemy> {
+  abilityId: TileKind;
+}
+
+interface ActiveBattlePeriodicDamage extends ActivePeriodicDamage<Enemy> {
+  abilityId: TileKind;
+  aura: PeriodicDamageAura;
+}
+
+interface ActiveDamagePopup {
+  text: Text;
+  remaining: number;
+}
+
 export class BattleScene extends Container {
   private readonly app: Application;
   private readonly battlefield = new Container();
@@ -35,6 +66,9 @@ export class BattleScene extends Container {
   private readonly bg = new Graphics();
   private readonly castle = new Container();
   private readonly enemies: Enemy[] = [];
+  private readonly activeAreaEffects: ActiveBattleAreaEffect[] = [];
+  private readonly activePeriodicDamages: ActiveBattlePeriodicDamage[] = [];
+  private readonly activeDamagePopups: ActiveDamagePopup[] = [];
   private readonly stateUnsubscribe: () => void;
   private readonly unitsById: Map<string, UnitDefinition>;
   private readonly abilitiesById: Map<TileKind, AbilityDefinition>;
@@ -96,11 +130,14 @@ export class BattleScene extends Container {
     }
 
     this.spellEffects.update(dt);
+    this.updateDamagePopups(dt);
 
     if (state.phase !== 'playing') return;
 
     this.updateWave(dt);
     this.updateEnemies(dt);
+    this.updateAreaEffects(dt);
+    this.updatePeriodicDamages(dt);
   };
 
   private updateWave(dt: number) {
@@ -191,8 +228,8 @@ export class BattleScene extends Container {
     root.x = isBoss
       ? this.app.screen.width / 2
       : 34 + Math.random() * Math.max(40, this.app.screen.width - 68);
-    const spawnMaxY = Math.max(62, Math.min(86, this.castleY - 70));
-    root.y = isBoss ? Math.min(82, spawnMaxY) : 62 + Math.random() * Math.max(0, spawnMaxY - 62);
+    const visualBottomExtent = Math.max(radius, (isBoss ? 37 : 24) + 6);
+    root.y = getEnemySpawnY(visualBottomExtent);
 
     this.enemiesLayer.addChild(root);
     const enemy: Enemy = {
@@ -255,8 +292,17 @@ export class BattleScene extends Container {
     }
   }
 
-  private damageEnemy(enemy: Enemy, amount: number, sourceId: string) {
-    enemy.hp -= getDamageAfterProtection(amount, sourceId, enemy.damageProtection);
+  private damageEnemy(
+    enemy: Enemy,
+    amount: number,
+    sourceId: string,
+    critical = false,
+    criticalMultiplier = 1,
+  ) {
+    const dealtDamage = getDamageAfterProtection(amount, sourceId, enemy.damageProtection);
+    enemy.hp -= dealtDamage;
+    this.showDamagePopup(enemy, dealtDamage, critical, criticalMultiplier);
+
     if (enemy.hp <= 0) {
       const index = this.enemies.indexOf(enemy);
       if (index >= 0) this.removeEnemy(enemy, index, true);
@@ -265,7 +311,39 @@ export class BattleScene extends Container {
     this.redrawEnemyHp(enemy);
   }
 
+  private showDamagePopup(enemy: Enemy, amount: number, critical: boolean, criticalMultiplier: number) {
+    const text = new Text({
+      text: formatDamagePopup(amount, critical, criticalMultiplier),
+      style: {
+        fill: critical ? 0xffd166 : 0xffffff,
+        fontSize: critical ? 18 : 14,
+        fontWeight: '900',
+      },
+    });
+    text.anchor.set(0.5);
+    text.position.set(enemy.root.x, enemy.root.y - (enemy.isBoss ? 52 : 34));
+    this.noticeLayer.addChild(text);
+    this.activeDamagePopups.push({ text, remaining: critical ? 1.05 : 0.85 });
+  }
+
+  private updateDamagePopups(dt: number) {
+    for (let i = this.activeDamagePopups.length - 1; i >= 0; i -= 1) {
+      const popup = this.activeDamagePopups[i];
+      popup.remaining -= dt;
+      popup.text.y -= (popup.remaining > 0.45 ? 38 : 22) * dt;
+      popup.text.alpha = Math.max(0, Math.min(1, popup.remaining / 0.3));
+
+      if (popup.remaining > 0) continue;
+      this.activeDamagePopups.splice(i, 1);
+      popup.text.destroy();
+    }
+  }
+
   private removeEnemy(enemy: Enemy, index: number, killed: boolean) {
+    for (let i = this.activePeriodicDamages.length - 1; i >= 0; i -= 1) {
+      if (this.activePeriodicDamages[i].target === enemy) this.removePeriodicDamageAt(i);
+    }
+
     this.enemies.splice(index, 1);
     enemy.root.destroy({ children: true });
     if (killed) useGameStore.getState().addKill(enemy.coinsOnDeath);
@@ -297,75 +375,240 @@ export class BattleScene extends Container {
     const ability = this.abilitiesById.get(kind);
     if (!ability || ability.effects.length === 0) return;
 
-    const hasDamage = ability.effects.some((effect) => effect.type === 'damage');
-    const hasSlow = ability.effects.some((effect) => effect.type === 'slow');
-    const hasHeal = ability.effects.some((effect) => effect.type === 'heal');
-    const visualKind = ability.target.type === 'area-enemies'
-      ? 'fire'
-      : hasDamage
-        ? 'lightning'
-        : hasSlow
-          ? 'ice'
-          : 'heal';
-    const targets = this.resolveEnemyTargets(ability.target);
-    const lightningTargetPoints = visualKind === 'lightning'
-      ? targets.map((enemy) => ({ x: enemy.root.x, y: enemy.root.y }))
-      : [];
-    const hasUsefulTarget = ability.target.type === 'castle'
-      ? hasDamage || (hasHeal && state.castleHp < state.castleMaxHp)
-      : ability.target.type === 'area-enemies' || targets.length > 0;
+    const resolvedEffects = ability.effects.map((effect) => ({
+      effect,
+      targets: this.resolveEnemyTargets(effect.target),
+    }));
 
-    // Do not consume a charge if the ability cannot have any effect.
-    if (state.phase !== 'playing' || !hasUsefulTarget || (spendCharge && !state.spendCharge(kind))) {
+    const hasUsefulEffect = resolvedEffects.some(({ effect, targets }) => {
+      if (effect.type === 'heal') {
+        return effect.target.type === 'castle' && state.castleHp < state.castleMaxHp;
+      }
+      if (effect.target.type === 'castle') return true;
+      if (effect.target.type === 'area-enemies') return true;
+      return targets.length > 0;
+    });
+
+    if (state.phase !== 'playing' || !hasUsefulEffect || (spendCharge && !state.spendCharge(kind))) {
       return;
     }
 
-    for (const effect of ability.effects) {
+    const lightningTargetPoints = resolvedEffects
+      .flatMap(({ targets }) => targets.map((enemy) => ({ x: enemy.root.x, y: enemy.root.y })))
+      .filter((point, index, points) => (
+        points.findIndex((candidate) => candidate.x === point.x && candidate.y === point.y) === index
+      ));
+
+    const hasCastleTarget = ability.effects.some((effect) => effect.target.type === 'castle');
+    const hasAreaEffect = ability.effects.some((effect) => (
+      effect.target.type === 'area-enemies' && (
+        effect.type === 'damage' || effect.type === 'periodic-damage' || effect.type === 'slow'
+      )
+    ));
+
+    if (hasAreaEffect) this.clearAreaEffectsForAbility(kind);
+
+    for (const { effect, targets } of resolvedEffects) {
+      if (effect.target.type === 'area-enemies' && (
+        effect.type === 'damage' || effect.type === 'periodic-damage' || effect.type === 'slow'
+      )) {
+        this.activateAreaEffect(kind, effect);
+        continue;
+      }
+
       if (effect.type === 'damage') {
-        if (ability.target.type === 'castle') {
-          state.damageCastle(effect.amount);
+        if (effect.target.type === 'castle') {
+          const hit = resolveDamageHit(
+            effect.amount,
+            effect.criticalChancePercent,
+            effect.criticalMultiplier,
+          );
+          state.damageCastle(hit.amount);
         } else {
-          targets.forEach((enemy) => this.damageEnemy(enemy, effect.amount, effect.damageSourceId));
+          targets.forEach((enemy) => {
+            if (this.enemies.includes(enemy)) {
+              const hit = resolveDamageHit(
+                effect.amount,
+                effect.criticalChancePercent,
+                effect.criticalMultiplier,
+              );
+              this.damageEnemy(
+                enemy,
+                hit.amount,
+                effect.damageSourceId,
+                hit.critical,
+                hit.criticalMultiplier,
+              );
+            }
+          });
         }
+      } else if (effect.type === 'periodic-damage') {
+        targets.forEach((enemy) => this.applyPeriodicDamage(enemy, effect, kind));
       } else if (effect.type === 'slow') {
-        targets.forEach((enemy) => {
-          enemy.frozenFor = Math.max(enemy.frozenFor, effect.duration);
-          enemy.slowPercent = Math.max(enemy.slowPercent, effect.slowPercent);
-        });
-      } else if (effect.type === 'heal') {
+        targets.forEach((enemy) => this.applySlowEffect(enemy, effect));
+      } else if (effect.type === 'heal' && effect.target.type === 'castle') {
         state.healCastle(effect.amount);
       }
     }
 
-    if (visualKind === 'lightning') {
-      this.spellEffects.play(visualKind, {
-        source: { x: this.app.screen.width / 2, y: this.castleY - 18 },
-        targets: lightningTargetPoints,
+    if (ability.visualEffect === 'none') return;
+
+    if (ability.visualEffect === 'lightning') {
+      const targetPoints = [...lightningTargetPoints];
+      let source = { x: this.app.screen.width / 2, y: this.castleY - 18 };
+
+      if (targetPoints.length === 0 && hasCastleTarget) {
+        source = { x: this.app.screen.width / 2, y: 18 };
+        targetPoints.push({ x: this.app.screen.width / 2, y: this.castleY - 18 });
+      } else if (targetPoints.length === 0) {
+        targetPoints.push({ x: this.app.screen.width / 2, y: this.battleHeight / 2 });
+      }
+
+      this.spellEffects.play('lightning', {
+        source,
+        targets: targetPoints,
       });
       return;
     }
 
-    this.spellEffects.play(visualKind, {
-      areaHeightPercent: ability.target.type === 'area-enemies'
-        ? ability.target.areaHeightPercent
+    const areaTarget = ability.effects
+      .map((effect) => effect.target)
+      .find((target) => target.type === 'area-enemies');
+
+    this.spellEffects.play(ability.visualEffect, {
+      areaHeightPercent: ability.visualEffect === 'fire' && areaTarget?.type === 'area-enemies'
+        ? areaTarget.areaHeightPercent
         : undefined,
     });
   }
 
+  private activateAreaEffect(abilityId: TileKind, effect: AreaAbilityEffect) {
+    const activeEffect: ActiveBattleAreaEffect = {
+      ...createActiveAreaEffect<Enemy>(effect),
+      abilityId,
+    };
+    this.applyAreaEffect(activeEffect);
+    if (activeEffect.remaining > 0) this.activeAreaEffects.push(activeEffect);
+  }
+
+  private clearAreaEffectsForAbility(abilityId: TileKind) {
+    for (let i = this.activeAreaEffects.length - 1; i >= 0; i -= 1) {
+      if (this.activeAreaEffects[i].abilityId === abilityId) this.activeAreaEffects.splice(i, 1);
+    }
+  }
+
+  private updateAreaEffects(dt: number) {
+    for (let i = this.activeAreaEffects.length - 1; i >= 0; i -= 1) {
+      const activeEffect = this.activeAreaEffects[i];
+      this.applyAreaEffect(activeEffect);
+      if (!advanceAreaEffect(activeEffect, dt)) this.activeAreaEffects.splice(i, 1);
+    }
+  }
+
+  private applyAreaEffect(activeEffect: ActiveBattleAreaEffect) {
+    const targets = collectNewAreaTargets(
+      activeEffect,
+      this.enemies,
+      (enemy) => enemy.root.y,
+      this.battleHeight,
+    );
+
+    for (const enemy of targets) {
+      if (!this.enemies.includes(enemy)) continue;
+      if (activeEffect.effect.type === 'damage') {
+        const hit = resolveDamageHit(
+          activeEffect.effect.amount,
+          activeEffect.effect.criticalChancePercent,
+          activeEffect.effect.criticalMultiplier,
+        );
+        this.damageEnemy(
+          enemy,
+          hit.amount,
+          activeEffect.effect.damageSourceId,
+          hit.critical,
+          hit.criticalMultiplier,
+        );
+      } else if (activeEffect.effect.type === 'periodic-damage') {
+        this.applyPeriodicDamage(enemy, activeEffect.effect, activeEffect.abilityId);
+      } else {
+        this.applySlowEffect(enemy, activeEffect.effect);
+      }
+    }
+  }
+
+  private applyPeriodicDamage(enemy: Enemy, effect: PeriodicDamageAbilityEffect, abilityId: TileKind) {
+    if (!this.enemies.includes(enemy) || !shouldApplyPeriodicDamage(effect.chancePercent)) return;
+
+    const aura = new PeriodicDamageAura(effect.visualColor, enemy.isBoss);
+    enemy.root.addChild(aura);
+    const activeEffect: ActiveBattlePeriodicDamage = {
+      ...createActivePeriodicDamage(enemy, effect),
+      abilityId,
+      aura,
+    };
+    const existingIndex = this.activePeriodicDamages.findIndex((item) => (
+      item.abilityId === abilityId && item.target === enemy
+    ));
+
+    if (existingIndex >= 0) {
+      this.removePeriodicDamageAt(existingIndex);
+    }
+    this.activePeriodicDamages.push(activeEffect);
+  }
+
+  private updatePeriodicDamages(dt: number) {
+    for (let i = this.activePeriodicDamages.length - 1; i >= 0; i -= 1) {
+      const activeEffect = this.activePeriodicDamages[i];
+      if (!this.enemies.includes(activeEffect.target)) {
+        this.removePeriodicDamageAt(i);
+        continue;
+      }
+
+      activeEffect.aura.update(dt);
+      const ticks = advancePeriodicDamage(activeEffect, dt);
+      for (let tick = 0; tick < ticks; tick += 1) {
+        if (!this.enemies.includes(activeEffect.target)) break;
+        const hit = resolvePeriodicDamageTick(activeEffect.effect);
+        this.damageEnemy(
+          activeEffect.target,
+          hit.amount,
+          'periodic-damage',
+          hit.critical,
+          hit.criticalMultiplier,
+        );
+      }
+
+      if (activeEffect.remaining <= 0 || !this.enemies.includes(activeEffect.target)) {
+        if (this.activePeriodicDamages[i] === activeEffect) this.removePeriodicDamageAt(i);
+      }
+    }
+  }
+
+  private removePeriodicDamageAt(index: number) {
+    const activeEffect = this.activePeriodicDamages[index];
+    if (!activeEffect) return;
+
+    this.activePeriodicDamages.splice(index, 1);
+    if (activeEffect.aura.parent) activeEffect.aura.parent.removeChild(activeEffect.aura);
+    activeEffect.aura.destroy({ children: true });
+  }
+
+  private applySlowEffect(enemy: Enemy, effect: SlowAbilityEffect) {
+    if (!this.enemies.includes(enemy)) return;
+    enemy.frozenFor = Math.max(enemy.frozenFor, effect.duration);
+    enemy.slowPercent = Math.max(enemy.slowPercent, effect.slowPercent);
+  }
+
   private resolveEnemyTargets(target: AbilityTarget): Enemy[] {
     if (target.type === 'all-enemies') return [...this.enemies];
-    if (target.type === 'area-enemies') return this.enemiesInFireArea(target.areaHeightPercent ?? 50);
+    if (target.type === 'area-enemies') {
+      return getTargetsInArea(target, this.enemies, (enemy) => enemy.root.y, this.battleHeight);
+    }
     if (target.type === 'castle') return [];
 
     const limit = Math.max(1, Math.floor(target.count ?? 1));
     if (target.type === 'random-enemies') return this.randomEnemies(limit);
     return this.closestEnemies(limit);
-  }
-
-  private enemiesInFireArea(heightPercent: number) {
-    const clampedHeightPercent = Math.max(1, Math.min(100, heightPercent));
-    const fireAreaTop = this.battleHeight * (1 - clampedHeightPercent / 100);
-    return this.enemies.filter((enemy) => enemy.root.y >= fireAreaTop);
   }
 
   private randomEnemies(limit: number) {
@@ -439,9 +682,11 @@ export class BattleScene extends Container {
       const widthScale = previousWidth > 0 ? width / previousWidth : 1;
 
       for (const enemy of this.enemies) {
-        const progress = Math.max(0, Math.min(1, (enemy.root.y - laneTop) / (previousLaneEnd - laneTop)));
         const sidePadding = enemy.isBoss ? 34 : 24;
         enemy.root.x = Math.min(width - sidePadding, Math.max(sidePadding, enemy.root.x * widthScale));
+        if (enemy.root.y < 0) continue;
+
+        const progress = Math.max(0, Math.min(1, (enemy.root.y - laneTop) / (previousLaneEnd - laneTop)));
         enemy.root.y = laneTop + progress * (nextLaneEnd - laneTop);
       }
     }
@@ -509,6 +754,10 @@ export class BattleScene extends Container {
       this.enemies[i].root.destroy({ children: true });
     }
     this.enemies.length = 0;
+    this.activeAreaEffects.length = 0;
+    this.activePeriodicDamages.length = 0;
+    for (const popup of this.activeDamagePopups) popup.text.destroy();
+    this.activeDamagePopups.length = 0;
     this.spellEffects.clearEffects();
 
     this.waveIndex = 0;

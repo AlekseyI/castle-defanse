@@ -18,19 +18,58 @@ afterEach(() => {
 });
 
 describe('abilityStorage', () => {
-  it('loads abilities with multiple effects saved in the current format', () => {
+  it('loads abilities with independent effect targets and a selected visual effect', () => {
     installLocalStorage();
     const abilities: AbilityDefinition[] = [
       {
-        id: 'fire_slow',
-        name: 'Огненный холод',
+        id: 'fire_heal',
+        name: 'Огненное лечение',
         effects: [
-          { type: 'damage', amount: 55, damageSourceId: 'fire' },
-          { type: 'slow', slowPercent: 30, duration: 2 },
+          {
+            type: 'damage',
+            amount: 55,
+            damageSourceId: 'fire',
+            criticalChancePercent: 20,
+            criticalMultiplier: 1.5,
+            target: { type: 'area-enemies', areaHeightPercent: 50 },
+          },
+          {
+            type: 'heal',
+            amount: 20,
+            target: { type: 'castle' },
+          },
         ],
+        visualEffect: 'fire',
         color: '#e9573f',
         image: { name: 'fire.svg', src: 'data:image/svg+xml;base64,AAA' },
-        target: { type: 'area-enemies', areaHeightPercent: 50 },
+      },
+    ];
+
+    persistAbilities(abilities);
+    expect(loadAbilities()).toEqual(abilities);
+  });
+
+  it('loads abilities with periodic damage parameters', () => {
+    installLocalStorage();
+    const abilities: AbilityDefinition[] = [
+      {
+        id: 'fire_dot',
+        name: 'Горение',
+        effects: [
+          {
+            type: 'periodic-damage',
+            chancePercent: 45,
+            amount: 12,
+            duration: 6,
+            criticalChancePercent: 30,
+            criticalMultiplier: 1.75,
+            visualColor: '#f97316',
+            target: { type: 'area-enemies', areaHeightPercent: 50 },
+          },
+        ],
+        visualEffect: 'fire',
+        color: '#e9573f',
+        image: { name: 'fire.svg', src: 'data:image/svg+xml;base64,AAA' },
       },
     ];
 
@@ -40,32 +79,50 @@ describe('abilityStorage', () => {
 
   it('rejects duplicate effect types in saved json', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.abilities.v4', JSON.stringify([
+    window.localStorage.setItem('game.abilities.v8', JSON.stringify([
       {
         id: 'double_damage',
         name: 'Двойной урон',
         effects: [
-          { type: 'damage', amount: 10, damageSourceId: 'fire' },
-          { type: 'damage', amount: 20, damageSourceId: 'fire' },
+          {
+            type: 'damage',
+            amount: 10,
+            damageSourceId: 'fire',
+            criticalChancePercent: 0,
+            criticalMultiplier: 1.5,
+            target: { type: 'all-enemies' },
+          },
+          {
+            type: 'damage',
+            amount: 20,
+            damageSourceId: 'fire',
+            criticalChancePercent: 0,
+            criticalMultiplier: 1.5,
+            target: { type: 'all-enemies' },
+          },
         ],
+        visualEffect: 'fire',
         color: '#e9573f',
-        target: { type: 'all-enemies' },
       },
     ]));
 
     expect(loadAbilities()).toEqual(DEFAULT_ABILITIES);
   });
 
-  it('does not migrate the previous single-effect storage version', () => {
+  it('does not load the previous json storage version', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.abilities.v3', JSON.stringify([
+    window.localStorage.setItem('game.abilities.v7', JSON.stringify([
       {
         id: 'fire',
         name: 'Огонь',
-        effectType: 'damage',
+        effects: [{
+          type: 'damage',
+          amount: 55,
+          damageSourceId: 'fire',
+          target: { type: 'area-enemies', areaHeightPercent: 50 },
+        }],
+        visualEffect: 'fire',
         color: '#e9573f',
-        target: { type: 'area-enemies', areaHeightPercent: 50 },
-        parameters: { amount: 55, damageSourceId: 'fire' },
       },
     ]));
 

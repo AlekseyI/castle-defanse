@@ -17,17 +17,28 @@ afterEach(() => {
 });
 
 describe('ability effects storage', () => {
-  it('persists multiple effects as part of the ability json', () => {
+  it('persists different targets for effects in the same ability', () => {
     installLocalStorage();
     const abilities: AbilityDefinition[] = [{
       id: 'castle_combo',
       name: 'Замковое комбо',
       effects: [
-        { type: 'damage', amount: 10, damageSourceId: 'fire' },
-        { type: 'heal', amount: 20 },
+        {
+          type: 'damage',
+          amount: 10,
+          damageSourceId: 'fire',
+          criticalChancePercent: 0,
+          criticalMultiplier: 1.5,
+          target: { type: 'area-enemies', areaHeightPercent: 40 },
+        },
+        {
+          type: 'heal',
+          amount: 20,
+          target: { type: 'castle' },
+        },
       ],
+      visualEffect: 'fire',
       color: '#58c985',
-      target: { type: 'castle' },
     }];
 
     persistAbilities(abilities);
