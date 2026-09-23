@@ -1,90 +1,134 @@
 import { Container, Graphics } from 'pixi.js';
 
+interface DotParticle {
+  x: number;
+  y: number;
+  color: number;
+  size: number;
+  maxLife: number;
+  life: number;
+  vx: number;
+  vy: number;
+}
+
+const FRAME_STEP = 1 / 60;
+const HTML_TARGET_RADIUS = 90;
+const EFFECT_RADIUS_MULTIPLIER = 1.75;
+const PARTICLE_SPAWN_CHANCE = 0.7;
+const SHAKE_INTERVAL = 1.2;
+const SHAKE_DURATION = 0.08;
+
 function colorFromHex(hex: string): number {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return 0x64748b;
   return Number.parseInt(hex.slice(1), 16);
 }
 
+function adjustColorBrightness(color: number, percent: number): number {
+  const factor = (100 + percent) / 100;
+  const red = Math.min(255, Math.max(0, Math.trunc(((color >> 16) & 0xff) * factor)));
+  const green = Math.min(255, Math.max(0, Math.trunc(((color >> 8) & 0xff) * factor)));
+  const blue = Math.min(255, Math.max(0, Math.trunc((color & 0xff) * factor)));
+  return (red << 16) | (green << 8) | blue;
+}
+
 export class PeriodicDamageAura extends Container {
-  private readonly glow = new Graphics();
-  private readonly mist = new Graphics();
-  private readonly sparks = new Graphics();
-  private readonly color: number;
-  private readonly bodyRadius: number;
+  private readonly particleGraphics = new Graphics();
+  private readonly particles: DotParticle[] = [];
+  private readonly palette: number[];
+  private readonly effectRadius: number;
+  private readonly htmlScale: number;
+  private frameAccumulator = 0;
   private elapsed = 0;
+  private nextShakeAt = SHAKE_INTERVAL;
+  private shakeUntil = 0;
+  private shakeX = 0;
+  private shakeY = 0;
 
   constructor(color: string, isBoss: boolean) {
     super();
     this.eventMode = 'none';
-    this.color = colorFromHex(color);
-    this.bodyRadius = isBoss ? 31 : 20;
-    this.glow.blendMode = 'screen';
-    this.mist.blendMode = 'screen';
-    this.sparks.blendMode = 'screen';
-    this.addChild(this.glow, this.mist, this.sparks);
-    this.redraw();
+    const effectColor = colorFromHex(color);
+    const bodyRadius = isBoss ? 31 : 20;
+    this.effectRadius = bodyRadius * EFFECT_RADIUS_MULTIPLIER;
+    this.htmlScale = this.effectRadius / HTML_TARGET_RADIUS;
+    this.palette = [
+      effectColor,
+      adjustColorBrightness(effectColor, 40),
+      adjustColorBrightness(effectColor, -30),
+    ];
+
+    this.particleGraphics.blendMode = 'add';
+    this.addChild(this.particleGraphics);
   }
 
   update(dt: number) {
-    this.elapsed += Math.max(0, dt);
-    this.redraw();
-  }
+    const safeDt = Math.max(0, dt);
+    this.elapsed += safeDt;
+    this.frameAccumulator += safeDt;
 
-  private redraw() {
-    const pulse = 0.5 + Math.sin(this.elapsed * 4.2) * 0.5;
-    const breathe = 0.5 + Math.sin(this.elapsed * 2.1 + 0.8) * 0.5;
-    const baseY = -this.bodyRadius - 5;
-
-    this.glow.clear();
-    this.mist.clear();
-    this.sparks.clear();
-
-    // Мягкое цветное сияние вокруг цели: помогает быстро заметить активный DoT.
-    this.glow
-      .circle(0, -2, this.bodyRadius * (1.02 + pulse * 0.08))
-      .fill({ color: this.color, alpha: 0.035 + pulse * 0.035 });
-    this.glow
-      .circle(0, -2, this.bodyRadius * (1.18 + breathe * 0.08))
-      .stroke({ color: this.color, width: 2.2, alpha: 0.13 + pulse * 0.11 });
-    this.glow
-      .circle(0, -2, this.bodyRadius * (1.38 + breathe * 0.1))
-      .stroke({ color: this.color, width: 1.2, alpha: 0.04 + pulse * 0.055 });
-
-    // Несколько поднимающихся полупрозрачных клубов создают эффект магического дыма.
-    for (let i = 0; i < 7; i += 1) {
-      const speed = 0.72 + i * 0.055;
-      const phase = this.elapsed * speed + i * 1.17;
-      const travel = (phase * 17) % 34;
-      const drift = Math.sin(phase * 2.25 + i) * (5.5 + (i % 3) * 2.2);
-      const wobble = Math.cos(phase * 1.35 + i * 0.7) * 2.3;
-      const y = baseY - travel;
-      const radius = 4.2 + (i % 3) * 1.7 + pulse * 1.2;
-      const fade = Math.max(0, 1 - travel / 34);
-      const alpha = (0.055 + fade * 0.14) * (0.72 + pulse * 0.28);
-
-      this.mist.circle(drift, y, radius).fill({ color: this.color, alpha });
-      this.mist.circle(drift + wobble, y - radius * 0.55, radius * 0.72).fill({
-        color: this.color,
-        alpha: alpha * 0.72,
-      });
+    while (this.frameAccumulator >= FRAME_STEP) {
+      this.frameAccumulator -= FRAME_STEP;
+      this.stepFrame();
     }
 
-    // Верхнее мерцающее кольцо и частицы делают статус заметным, но не перекрывают моба.
-    const crownY = baseY - 30;
-    this.sparks
-      .circle(0, crownY, 7 + pulse * 2)
-      .stroke({ color: this.color, width: 1.4, alpha: 0.12 + pulse * 0.16 });
+    this.updateShake();
+    this.drawParticles();
+  }
 
-    for (let i = 0; i < 6; i += 1) {
-      const angle = this.elapsed * (1.25 + i * 0.03) + i * Math.PI / 3;
-      const orbit = 10 + (i % 2) * 4 + breathe * 2;
-      const x = Math.cos(angle) * orbit;
-      const y = crownY + Math.sin(angle) * 4.5;
-      const radius = 1.2 + (i % 3) * 0.45 + pulse * 0.35;
-      this.sparks.circle(x, y, radius).fill({
-        color: this.color,
-        alpha: 0.2 + pulse * 0.38,
-      });
+  private stepFrame() {
+    if (Math.random() < PARTICLE_SPAWN_CHANCE) this.particles.push(this.createParticle());
+
+    for (let i = this.particles.length - 1; i >= 0; i -= 1) {
+      const particle = this.particles[i];
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.life -= 1;
+      if (particle.life <= 0) this.particles.splice(i, 1);
+    }
+  }
+
+  private createParticle(): DotParticle {
+    const maxLife = Math.random() * 40 + 50;
+    return {
+      x: (-60 + Math.random() * 120) * this.htmlScale,
+      y: (-40 + Math.random() * 100) * this.htmlScale,
+      color: this.palette[Math.floor(Math.random() * this.palette.length)],
+      size: (Math.random() * 5 + 1.5) * this.htmlScale,
+      maxLife,
+      life: maxLife,
+      vx: (Math.random() - 0.5) * 0.6 * this.htmlScale,
+      vy: (-Math.random() * 0.8 - 0.3) * this.htmlScale,
+    };
+  }
+
+  private drawParticles() {
+    this.particleGraphics.clear();
+
+    for (const particle of this.particles) {
+      const alpha = particle.life / particle.maxLife;
+      this.particleGraphics
+        .circle(particle.x, particle.y, particle.size)
+        .fill({ color: particle.color, alpha });
+    }
+  }
+
+  private updateShake() {
+    if (this.elapsed >= this.nextShakeAt) {
+      do {
+        this.nextShakeAt += SHAKE_INTERVAL;
+      } while (this.elapsed >= this.nextShakeAt);
+
+      this.shakeUntil = this.elapsed + SHAKE_DURATION;
+      this.shakeX = (Math.random() - 0.5) * 4 * this.htmlScale;
+      this.shakeY = (Math.random() - 0.5) * 4 * this.htmlScale;
+    }
+
+    if (this.elapsed < this.shakeUntil) {
+      this.position.set(this.shakeX, this.shakeY);
+      this.scale.set(0.97);
+    } else {
+      this.position.set(0, 0);
+      this.scale.set(1);
     }
   }
 }

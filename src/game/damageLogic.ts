@@ -28,6 +28,6 @@ export function formatDamageAmount(amount: number): string {
 
 export function formatDamagePopup(hitAmount: number, critical: boolean, criticalMultiplier: number): string {
   const damage = formatDamageAmount(hitAmount);
-  if (!critical) return `-${damage}`;
-  return `КРИТ! -${damage} ×${formatDamageAmount(criticalMultiplier)}`;
+  if (!critical) return damage;
+  return `${damage} ×${formatDamageAmount(criticalMultiplier)}`;
 }

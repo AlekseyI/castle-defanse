@@ -19,7 +19,7 @@ describe('damageLogic', () => {
   });
 
   it('formats normal and critical floating damage labels', () => {
-    expect(formatDamagePopup(12.25, false, 1)).toBe('-12.3');
-    expect(formatDamagePopup(60, true, 1.5)).toBe('КРИТ! -60 ×1.5');
+    expect(formatDamagePopup(12.25, false, 1)).toBe('12.3');
+    expect(formatDamagePopup(60, true, 1.5)).toBe('60 ×1.5');
   });
 });
