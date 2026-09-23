@@ -27,6 +27,7 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     speed: unit.speed,
     damage: unit.damage,
     coinsOnDeath: unit.coinsOnDeath,
+    isBoss: unit.isBoss,
   };
 
   if (unit.gameKey) normalized.gameKey = unit.gameKey;

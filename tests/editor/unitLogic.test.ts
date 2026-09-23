@@ -14,6 +14,7 @@ const goblin: UnitDefinition = {
   speed: 40,
   damage: 10,
   coinsOnDeath: 1,
+  isBoss: false,
   image: {
     name: 'goblin.png',
     src: 'data:image/png;base64,goblin',
@@ -29,6 +30,7 @@ describe('unitLogic', () => {
       speed: 35,
       damage: 24,
       coinsOnDeath: 7,
+      isBoss: true,
       damageProtection: {
         ' FIRE ': 25,
         ' ICE ': -50,
@@ -45,6 +47,7 @@ describe('unitLogic', () => {
       speed: 35,
       damage: 24,
       coinsOnDeath: 7,
+      isBoss: true,
       damageProtection: {
         fire: 25,
         ice: -50,
@@ -66,6 +69,7 @@ describe('unitLogic', () => {
         speed: -1,
         damage: Number.NaN,
         coinsOnDeath: -1,
+        isBoss: false,
       },
       [goblin],
     );
@@ -138,7 +142,7 @@ describe('unitLogic', () => {
   });
 
   it('creates, updates and deletes units without changing unrelated records', () => {
-    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3 };
+    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3, isBoss: false };
     const created = saveUnit([goblin], orc);
     const updated = saveUnit(created, { ...goblin, hp: 120 }, 'goblin');
     const deleted = deleteUnit(updated, 'orc');

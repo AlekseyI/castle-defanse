@@ -1,12 +1,13 @@
 import { Container, Graphics, Sprite, Texture, Text, type Application } from 'pixi.js';
 import { loadAbilities } from '../editor/abilities/abilityStorage';
+import { loadActiveMap } from '../editor/maps/mapStorage';
+import type { MapDefinition } from '../editor/maps/types';
 import type { AbilityDefinition, AbilityTarget, PeriodicDamageAbilityEffect, SlowAbilityEffect } from '../editor/abilities/types';
 import { loadUnits } from '../editor/units/unitStorage';
 import type { UnitDefinition } from '../editor/units/types';
-import { WAVES } from './config';
 import type { TileKind } from './types';
 import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
-import { getWaveStep } from './waveLogic';
+import { getRuntimeSpawnBlock, getRuntimeUnit, getRuntimeWave, getWaveBlockStep } from './waveLogic';
 import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
 import { SpellEffects } from './effects/SpellEffects';
@@ -64,6 +65,9 @@ export class BattleScene extends Container {
   private readonly spellEffects = new SpellEffects();
   private readonly noticeLayer = new Container();
   private readonly bg = new Graphics();
+  private backgroundSprite: Sprite | null = null;
+  private backgroundImageWidth = 0;
+  private backgroundImageHeight = 0;
   private readonly castle = new Container();
   private readonly enemies: Enemy[] = [];
   private readonly activeAreaEffects: ActiveBattleAreaEffect[] = [];
@@ -71,6 +75,7 @@ export class BattleScene extends Container {
   private readonly activeDamagePopups: ActiveDamagePopup[] = [];
   private readonly stateUnsubscribe: () => void;
   private readonly unitsById: Map<string, UnitDefinition>;
+  private readonly map: MapDefinition;
   private readonly abilitiesById: Map<TileKind, AbilityDefinition>;
   private layoutWidth = 0;
   private enemySpeedScale = 1;
@@ -79,8 +84,8 @@ export class BattleScene extends Container {
   private battleHeight = 340;
   private spawnTimer = 0;
   private waveIndex = 0;
-  private spawnedThisWave = 0;
-  private bossSpawnedThisWave = false;
+  private blockIndex = 0;
+  private spawnedThisBlock = 0;
   private betweenWavesFor = 0;
   private autoShuffleMessageFor = 0;
   private autoShuffleText: Text | null = null;
@@ -93,13 +98,18 @@ export class BattleScene extends Container {
 
     const units = loadUnits();
     this.unitsById = createUnitLookup(units);
+    this.map = loadActiveMap();
     const abilities = loadAbilities();
     this.abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
     this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
 
-    useGameStore.getState().reset(WAVES.length, [...this.abilitiesById.keys()]);
+    useGameStore.getState().reset(
+      this.map.endless.enabled ? 0 : this.map.waves.length,
+      [...this.abilitiesById.keys()],
+    );
+    this.loadMapBackground();
     this.buildCastle();
     this.buildNotice();
     this.layout();
@@ -146,44 +156,69 @@ export class BattleScene extends Container {
       return;
     }
 
-    const wave = WAVES[this.waveIndex];
-    if (!wave) return;
-
-    const step = getWaveStep({
-      spawnedEnemies: this.spawnedThisWave,
-      enemyCount: wave.count,
-      activeEnemies: this.enemies.length,
-      bossSpawned: this.bossSpawnedThisWave,
-    });
-
-    if (step === 'spawn-enemy') {
-      this.spawnTimer -= dt;
-      if (this.spawnTimer <= 0) {
-        const unit = this.getUnit(wave.unitId);
-        if (unit) this.spawnEnemy(unit);
-        this.spawnedThisWave += 1;
-        this.spawnTimer = wave.spawnEvery;
-      }
-      return;
-    }
-
-    if (step === 'wait-enemies') return;
-
-    if (step === 'spawn-boss') {
-      const boss = this.getUnit(wave.bossUnitId);
-      if (boss) this.spawnEnemy(boss, true);
-      this.bossSpawnedThisWave = true;
-      return;
-    }
-
-    if (this.waveIndex >= WAVES.length - 1) {
+    const runtimeWave = getRuntimeWave(this.map, this.waveIndex);
+    if (!runtimeWave) {
       useGameStore.getState().setPhase('victory');
       return;
     }
 
-    this.waveIndex += 1;
-    this.spawnedThisWave = 0;
-    this.bossSpawnedThisWave = false;
+    const block = runtimeWave.wave.blocks[this.blockIndex];
+    if (!block) {
+      if (this.enemies.length > 0) return;
+      this.completeWave();
+      return;
+    }
+
+    const runtimeBlock = getRuntimeSpawnBlock(
+      block,
+      this.map.endless,
+      runtimeWave.endlessCycle,
+    );
+    const nextBlock = runtimeWave.wave.blocks[this.blockIndex + 1];
+    const step = getWaveBlockStep({
+      spawnedUnits: this.spawnedThisBlock,
+      blockCount: runtimeBlock.count,
+      activeEnemies: this.enemies.length,
+      hasNextBlock: Boolean(nextBlock),
+      nextStartWhen: nextBlock?.startWhen,
+    });
+
+    if (step === 'spawn-unit') {
+      this.spawnTimer -= dt;
+      if (this.spawnTimer <= 0) {
+        const unit = this.getUnit(runtimeBlock.unitId);
+        if (unit) {
+          const runtimeUnit = getRuntimeUnit(unit, this.map.endless, runtimeWave.endlessCycle);
+          this.spawnEnemy(runtimeUnit);
+        }
+        this.spawnedThisBlock += 1;
+        this.spawnTimer = runtimeBlock.spawnEvery;
+      }
+      return;
+    }
+
+    if (step === 'wait-field-clear') return;
+
+    if (step === 'advance-block') {
+      this.blockIndex += 1;
+      this.spawnedThisBlock = 0;
+      this.spawnTimer = 0;
+      return;
+    }
+
+    this.completeWave();
+  }
+
+  private completeWave() {
+    const nextWaveIndex = this.waveIndex + 1;
+    if (!getRuntimeWave(this.map, nextWaveIndex)) {
+      useGameStore.getState().setPhase('victory');
+      return;
+    }
+
+    this.waveIndex = nextWaveIndex;
+    this.blockIndex = 0;
+    this.spawnedThisBlock = 0;
     this.spawnTimer = 0.3;
     this.betweenWavesFor = 2;
     useGameStore.getState().setWave(this.waveIndex + 1);
@@ -193,7 +228,8 @@ export class BattleScene extends Container {
     return this.unitsById.get(unitId);
   }
 
-  private spawnEnemy(unit: UnitDefinition, isBoss = false) {
+  private spawnEnemy(unit: UnitDefinition) {
+    const isBoss = unit.isBoss;
     const { hp, speed, damage, coinsOnDeath, damageProtection } = unit;
     const root = new Container();
     const body = new Graphics();
@@ -626,6 +662,44 @@ export class BattleScene extends Container {
       .slice(0, limit);
   }
 
+  private loadMapBackground() {
+    const src = this.map.background.image?.src;
+    if (!src) return;
+
+    const image = new Image();
+    image.onload = () => {
+      if (this.cleanupDone) return;
+
+      this.backgroundImageWidth = image.naturalWidth;
+      this.backgroundImageHeight = image.naturalHeight;
+      const sprite = new Sprite(Texture.from(image));
+      this.backgroundSprite = sprite;
+      this.addChildAt(sprite, 1);
+      this.layoutMapBackground();
+    };
+    image.src = src;
+  }
+
+  private layoutMapBackground() {
+    const sprite = this.backgroundSprite;
+    if (!sprite || this.backgroundImageWidth <= 0 || this.backgroundImageHeight <= 0) return;
+
+    const width = Math.max(1, this.app.screen.width);
+    const height = Math.max(1, this.app.screen.height);
+    const imageRatio = this.backgroundImageWidth / this.backgroundImageHeight;
+    const canvasRatio = width / height;
+    const useWidth = this.map.background.fit === 'cover'
+      ? imageRatio < canvasRatio
+      : imageRatio > canvasRatio;
+
+    const drawWidth = useWidth ? width : height * imageRatio;
+    const drawHeight = useWidth ? width / imageRatio : height;
+
+    sprite.width = drawWidth;
+    sprite.height = drawHeight;
+    sprite.position.set((width - drawWidth) / 2, (height - drawHeight) / 2);
+  }
+
   private buildCastle() {
     const base = new Graphics()
       .roundRect(-38, -26, 76, 52, 12)
@@ -658,7 +732,11 @@ export class BattleScene extends Container {
     const previousCastleY = this.castleY;
     const compact = width <= 600 || height <= 360;
 
-    this.bg.clear().rect(0, 0, width, height).fill({ color: 0x0b1020 });
+    const backgroundColor = Number.parseInt(this.map.background.color.slice(1), 16);
+    this.bg.clear().rect(0, 0, width, height).fill({
+      color: Number.isFinite(backgroundColor) ? backgroundColor : 0x0b1020,
+    });
+    this.layoutMapBackground();
 
     this.battleHeight = Math.max(1, height);
     this.castleY = Math.max(82, height - 38);
@@ -761,10 +839,13 @@ export class BattleScene extends Container {
     this.spellEffects.clearEffects();
 
     this.waveIndex = 0;
-    this.spawnedThisWave = 0;
-    this.bossSpawnedThisWave = false;
+    this.blockIndex = 0;
+    this.spawnedThisBlock = 0;
     this.spawnTimer = 0;
     this.betweenWavesFor = 0;
-    useGameStore.getState().reset(WAVES.length, [...this.abilitiesById.keys()]);
+    useGameStore.getState().reset(
+      this.map.endless.enabled ? 0 : this.map.waves.length,
+      [...this.abilitiesById.keys()],
+    );
   }
 }

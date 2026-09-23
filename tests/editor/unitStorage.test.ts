@@ -28,6 +28,7 @@ describe('unitStorage', () => {
         speed: 20,
         damage: 10,
         coinsOnDeath: 4,
+        isBoss: false,
         damageProtection: { fire: -100 },
       },
     ];
@@ -54,6 +55,24 @@ describe('unitStorage', () => {
     expect(loaded.some((unit) => unit.id === 'legacy_unit')).toBe(false);
   });
 
+  it('rejects the old unit format without isBoss', () => {
+    installLocalStorage();
+    window.localStorage.setItem('game.units.v5', JSON.stringify([
+      {
+        id: 'old_unit',
+        name: 'Старый формат',
+        hp: 100,
+        speed: 20,
+        damage: 10,
+        coinsOnDeath: 1,
+      },
+    ]));
+
+    const loaded = loadUnits();
+    expect(loaded.map((unit) => unit.id)).toEqual(DEFAULT_UNITS.map((unit) => unit.id));
+    expect(loaded.some((unit) => unit.id === 'old_unit')).toBe(false);
+  });
+
   it('rejects saved protection values below -100%', () => {
     installLocalStorage();
     persistUnits([
@@ -64,6 +83,7 @@ describe('unitStorage', () => {
         speed: 20,
         damage: 10,
         coinsOnDeath: 1,
+        isBoss: false,
         damageProtection: { fire: -101 },
       },
     ]);

@@ -484,3 +484,23 @@
   cursor: not-allowed;
   opacity: 0.45;
 }
+
+
+.checkboxField {
+  min-height: 44px;
+  align-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.checkboxField input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #22d3ee;
+}

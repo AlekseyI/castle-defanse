@@ -13,6 +13,7 @@ const EMPTY_UNIT: UnitDefinition = {
   speed: 40,
   damage: 10,
   coinsOnDeath: 1,
+  isBoss: false,
   damageProtection: {},
 };
 
@@ -123,6 +124,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
       && current.speed === normalized.speed
       && current.damage === normalized.damage
       && current.coinsOnDeath === normalized.coinsOnDeath
+      && current.isBoss === normalized.isBoss
       && current.gameKey === normalized.gameKey
       && isSameDamageProtection(current.damageProtection, normalized.damageProtection)
       && current.image?.name === normalized.image?.name
@@ -328,6 +330,15 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                     onChange={(event) => setDraft((current) => ({ ...current, coinsOnDeath: parseNumber(event.target.value) }))}
                   />
                   {validation.errors.coinsOnDeath && <small className={styles.fieldError}>{validation.errors.coinsOnDeath}</small>}
+                </label>
+
+                <label className={styles.checkboxField}>
+                  <input
+                    type="checkbox"
+                    checked={draft.isBoss}
+                    onChange={(event) => setDraft((current) => ({ ...current, isBoss: event.target.checked }))}
+                  />
+                  <span>Босс</span>
                 </label>
               </div>
             </div>

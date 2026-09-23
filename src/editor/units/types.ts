@@ -12,6 +12,7 @@ export interface UnitDefinition {
   speed: number;
   damage: number;
   coinsOnDeath: number;
+  isBoss: boolean;
   damageProtection?: DamageProtection;
   image?: UnitImage;
   /** Stable internal reference used by game waves. It is not editable in the unit editor. */

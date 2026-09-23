@@ -1,6 +1,7 @@
 import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits } from '../../editor/units/unitStorage';
+import { loadMaps } from '../../editor/maps/mapStorage';
 import styles from './EditorsScreen.module.css';
 
 type EditorsScreenProps = {
@@ -8,12 +9,14 @@ type EditorsScreenProps = {
   onOpenDamageSources: () => void;
   onOpenAbilities: () => void;
   onOpenUnits: () => void;
+  onOpenMaps: () => void;
 };
 
-export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, onOpenUnits }: EditorsScreenProps) {
+export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, onOpenUnits, onOpenMaps }: EditorsScreenProps) {
   const damageSourcesCount = loadDamageSources().length;
   const abilitiesCount = loadAbilities().length;
   const unitsCount = loadUnits().length;
+  const mapsCount = loadMaps().length;
 
   return (
     <main className={styles.screen}>
@@ -48,6 +51,13 @@ export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, on
           <strong>Редактор юнитов</strong>
           <span>ID, название, изображение, HP, скорость и урон юнитов.</span>
           <small>Юнитов: {unitsCount}</small>
+        </button>
+
+        <button className={styles.card} type="button" onClick={onOpenMaps}>
+          <span className={styles.cardIcon} aria-hidden="true">🗺️</span>
+          <strong>Редактор карт и волн</strong>
+          <span>Background canvas, последовательности спавна и бесконечный режим волн.</span>
+          <small>Карт: {mapsCount}</small>
         </button>
       </section>
     </main>

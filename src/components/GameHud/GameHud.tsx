@@ -39,7 +39,7 @@ export function GameHud({ coveredByResult, onCast }: GameHudProps) {
   return (
     <div className={rootClassName}>
       <header className={styles.header}>
-        <div className={styles.wave}>Волна {wave}/{totalWaves}</div>
+        <div className={styles.wave}>Волна {wave}{totalWaves > 0 ? `/${totalWaves}` : ' ∞'}</div>
         <div className={styles.castle}>Замок {castleHp}/{castleMaxHp}</div>
         <div className={styles.coins}>🪙 {coins}</div>
       </header>
