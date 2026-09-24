@@ -736,7 +736,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                 </label>
 
                 <label className={styles.field}>
-                  <span>Кол-во карточек</span>
+                  <span>Количество карточек</span>
                   <input
                     type="number"
                     min="1"
@@ -748,7 +748,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                       upgradeSettings: { ...current.upgradeSettings, cardCount: inputNumber(event.target.value) },
                     }))}
                   />
-                  <small>Значение по умолчанию для всех волн и награды за босса.</small>
+                  <small className={styles.fieldHint}>Количество карточек, показываемых при выдаче награды.</small>
                   {validation.errors.upgradeCardCount && <small className={styles.fieldError}>{validation.errors.upgradeCardCount}</small>}
                 </label>
 
@@ -1017,7 +1017,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                         </label>
 
                         <label className={styles.field}>
-                          <span>Количество карточек при награде</span>
+                          <span>Количество карточек</span>
                           <input
                             type="number"
                             min="1"
@@ -1032,7 +1032,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                               upgradeReward: { ...currentWave.upgradeReward, cardCount: inputNumber(event.target.value) },
                             }))}
                           />
-                          <small>При включённом переопределении используется вместо общего количества, в том числе для награды за босса этой волны.</small>
+                          <small className={styles.fieldHint}>Количество карточек, показываемых при выдаче награды.</small>
                           {validation.errors[`wave.${wave.id}.upgradeReward.cardCount`] && (
                             <small className={styles.fieldError}>{validation.errors[`wave.${wave.id}.upgradeReward.cardCount`]}</small>
                           )}

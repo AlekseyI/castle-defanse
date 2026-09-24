@@ -28,7 +28,6 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     damage: unit.damage,
     coinsOnDeath: unit.coinsOnDeath,
     isBoss: unit.isBoss,
-    grantsUpgradeOnKill: unit.isBoss ? unit.grantsUpgradeOnKill : false,
   };
 
   if (unit.gameKey) normalized.gameKey = unit.gameKey;

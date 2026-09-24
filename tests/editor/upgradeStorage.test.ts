@@ -32,7 +32,38 @@ describe('upgradeStorage', () => {
     expect(loadUpgrades()).toEqual([card]);
   });
 
-  it('rejects incomplete or unknown card json instead of migrating it', () => {
+  it('persists and loads negative numeric trade-off effects', () => {
+    installLocalStorage();
+    const tradeOff: UpgradeCardDefinition = {
+      ...card,
+      id: 'cursed_power',
+      effects: [
+        { type: 'ability-damage-percent', abilityId: 'fire', value: -35 },
+        { type: 'ability-damage-target-count', abilityId: 'fire', value: -1 },
+        { type: 'ability-periodic-duration-flat', abilityId: 'fire', value: -1.5 },
+      ],
+    };
+
+    persistUpgrades([tradeOff]);
+    expect(loadUpgrades()).toEqual([tradeOff]);
+  });
+
+  it('persists direct target, source and color values in the current format', () => {
+    installLocalStorage();
+    const current: UpgradeCardDefinition = {
+      ...card,
+      effects: [
+        { type: 'ability-damage-target-type', abilityId: 'fire', value: 'area-enemies' },
+        { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
+        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
+      ],
+    };
+
+    persistUpgrades([current]);
+    expect(loadUpgrades()).toEqual([current]);
+  });
+
+  it('does not load the previous v1 card json format', () => {
     installLocalStorage();
     window.localStorage.setItem('game.upgrades.v1', JSON.stringify([{
       id: 'legacy',

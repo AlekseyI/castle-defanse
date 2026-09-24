@@ -6,6 +6,9 @@
   overflow: hidden;
   color: #e2e8f0;
   background: #070b13;
+  touch-action: pan-y;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .topbar {
@@ -327,16 +330,13 @@
 }
 
 .unitPicker input[type='search'] {
-  min-height: 34px;
-  padding-block: 6px;
-  font-size: 12px;
+  min-height: 42px;
+  font-size: 14px;
 }
 
 .compactField input,
 .compactField select {
-  height: 34px;
-  min-height: 34px;
-  padding-block: 6px;
+  min-height: 42px;
 }
 
 .fileButton {
@@ -554,11 +554,11 @@
 .blockFields {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(210px, 1.4fr) minmax(100px, 0.55fr) minmax(110px, 0.55fr) minmax(250px, 1.4fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
-.conditionField { min-width: 230px; }
+.conditionField { min-width: 0; }
 
 .removeBlockButton {
   width: 32px;
@@ -687,9 +687,9 @@
   margin: 14px 0;
   padding: 14px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(220px, 320px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
-  align-items: end;
+  align-items: start;
   border: 1px solid rgba(103, 232, 249, 0.18);
   border-radius: 14px;
   background: rgba(8, 145, 178, 0.06);

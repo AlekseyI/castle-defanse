@@ -15,7 +15,6 @@ const goblin: UnitDefinition = {
   damage: 10,
   coinsOnDeath: 1,
   isBoss: false,
-  grantsUpgradeOnKill: false,
   image: {
     name: 'goblin.png',
     src: 'data:image/png;base64,goblin',
@@ -32,7 +31,6 @@ describe('unitLogic', () => {
       damage: 24,
       coinsOnDeath: 7,
       isBoss: true,
-      grantsUpgradeOnKill: false,
       damageProtection: {
         ' FIRE ': 25,
         ' ICE ': -50,
@@ -50,7 +48,6 @@ describe('unitLogic', () => {
       damage: 24,
       coinsOnDeath: 7,
       isBoss: true,
-      grantsUpgradeOnKill: false,
       damageProtection: {
         fire: 25,
         ice: -50,
@@ -64,11 +61,6 @@ describe('unitLogic', () => {
   });
 
 
-  it('keeps boss upgrade reward only for boss units', () => {
-    expect(normalizeUnit({ ...goblin, isBoss: true, grantsUpgradeOnKill: true }).grantsUpgradeOnKill).toBe(true);
-    expect(normalizeUnit({ ...goblin, isBoss: false, grantsUpgradeOnKill: true }).grantsUpgradeOnKill).toBe(false);
-  });
-
   it('rejects duplicate ids and invalid combat values', () => {
     const result = validateUnit(
       {
@@ -79,7 +71,6 @@ describe('unitLogic', () => {
         damage: Number.NaN,
         coinsOnDeath: -1,
         isBoss: false,
-        grantsUpgradeOnKill: false,
       },
       [goblin],
     );
@@ -152,7 +143,7 @@ describe('unitLogic', () => {
   });
 
   it('creates, updates and deletes units without changing unrelated records', () => {
-    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3, isBoss: false, grantsUpgradeOnKill: false };
+    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3, isBoss: false };
     const created = saveUnit([goblin], orc);
     const updated = saveUnit(created, { ...goblin, hp: 120 }, 'goblin');
     const deleted = deleteUnit(updated, 'orc');

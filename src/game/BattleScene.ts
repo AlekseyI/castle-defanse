@@ -52,7 +52,6 @@ interface Enemy {
   frozenFor: number;
   slowPercent: number;
   isBoss: boolean;
-  grantsUpgradeOnKill: boolean;
 }
 
 interface ActiveBattleAreaEffect extends ActiveAreaEffect<Enemy> {
@@ -337,7 +336,6 @@ export class BattleScene extends Container {
       frozenFor: 0,
       slowPercent: 0,
       isBoss,
-      grantsUpgradeOnKill: unit.grantsUpgradeOnKill,
     };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
@@ -443,7 +441,7 @@ export class BattleScene extends Container {
       useGameStore.getState().addKill(enemy.coinsOnDeath);
       if (earnsBossUpgradeReward(
         enemy.isBoss,
-        this.map.upgradeSettings.rewardOnBossKill || enemy.grantsUpgradeOnKill,
+        this.map.upgradeSettings.rewardOnBossKill,
         reason,
       )) {
         this.bossUpgradeRewardEarned = true;

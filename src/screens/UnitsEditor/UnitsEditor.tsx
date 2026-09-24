@@ -14,7 +14,6 @@ const EMPTY_UNIT: UnitDefinition = {
   damage: 10,
   coinsOnDeath: 1,
   isBoss: false,
-  grantsUpgradeOnKill: false,
   damageProtection: {},
 };
 
@@ -126,7 +125,6 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
       && current.damage === normalized.damage
       && current.coinsOnDeath === normalized.coinsOnDeath
       && current.isBoss === normalized.isBoss
-      && current.grantsUpgradeOnKill === normalized.grantsUpgradeOnKill
       && current.gameKey === normalized.gameKey
       && isSameDamageProtection(current.damageProtection, normalized.damageProtection)
       && current.image?.name === normalized.image?.name
@@ -338,25 +336,11 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                   <input
                     type="checkbox"
                     checked={draft.isBoss}
-                    onChange={(event) => setDraft((current) => ({
-                      ...current,
-                      isBoss: event.target.checked,
-                      grantsUpgradeOnKill: event.target.checked ? current.grantsUpgradeOnKill : false,
-                    }))}
+                    onChange={(event) => setDraft((current) => ({ ...current, isBoss: event.target.checked }))}
                   />
                   <span>Босс</span>
                 </label>
 
-                {draft.isBoss && (
-                  <label className={styles.checkboxField}>
-                    <input
-                      type="checkbox"
-                      checked={draft.grantsUpgradeOnKill}
-                      onChange={(event) => setDraft((current) => ({ ...current, grantsUpgradeOnKill: event.target.checked }))}
-                    />
-                    <span>Давать карточку улучшения при убийстве</span>
-                  </label>
-                )}
               </div>
             </div>
 

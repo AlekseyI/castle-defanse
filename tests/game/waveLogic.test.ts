@@ -167,7 +167,6 @@ describe('waveLogic', () => {
       speed: 20,
       coinsOnDeath: 1,
       isBoss: true,
-      grantsUpgradeOnKill: false,
     };
     const runtime = getRuntimeUnit(unit, map.endless, 2);
 

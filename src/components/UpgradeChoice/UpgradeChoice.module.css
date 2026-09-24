@@ -117,6 +117,18 @@
 
 @media (max-width: 640px) {
   .overlay { padding: 12px; align-items: start; overflow: auto; }
-  .panel { padding: 16px; }
-  .cards { grid-template-columns: 1fr; }
+  .panel { padding: 16px; overflow-x: hidden; }
+  .cards {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .card {
+    flex: 0 0 min(78vw, 240px);
+    scroll-snap-align: start;
+  }
 }

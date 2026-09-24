@@ -7,28 +7,49 @@ import type {
   UpgradeRarity,
 } from './types';
 
-const STORAGE_KEY = 'game.upgrades.v1';
+const STORAGE_KEY = 'game.upgrades.v2';
 const CARD_KEYS = new Set(['id', 'name', 'description', 'rarity', 'weight', 'maxCount', 'effects', 'color', 'image']);
 const EFFECT_KEYS = new Set(['type', 'abilityId', 'value']);
 const IMAGE_KEYS = new Set(['name', 'src']);
 const EFFECT_TYPES = new Set<UpgradeEffectType>([
   'ability-damage-percent',
   'ability-damage-flat',
+  'ability-damage-target-type',
   'ability-damage-target-count',
+  'ability-damage-area-height',
+  'ability-damage-source',
   'ability-damage-critical-chance',
+  'ability-damage-critical-multiplier',
   'ability-periodic-damage-percent',
   'ability-periodic-damage-flat',
+  'ability-periodic-target-type',
   'ability-periodic-target-count',
+  'ability-periodic-area-height',
+  'ability-periodic-chance',
   'ability-periodic-critical-chance',
+  'ability-periodic-critical-multiplier',
   'ability-periodic-duration-percent',
   'ability-periodic-duration-flat',
+  'ability-periodic-visual-color',
   'ability-slow-percent',
+  'ability-slow-target-type',
   'ability-slow-target-count',
+  'ability-slow-area-height',
   'ability-slow-duration-percent',
   'ability-slow-duration-flat',
   'ability-heal-percent',
   'ability-heal-flat',
 ]);
+const STRING_VALUE_TYPES = new Set<UpgradeEffectType>([
+  'ability-damage-target-type',
+  'ability-damage-source',
+  'ability-periodic-target-type',
+  'ability-periodic-visual-color',
+  'ability-slow-target-type',
+]);
+const DAMAGE_TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle']);
+const ENEMY_TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies']);
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const RARITIES = new Set<UpgradeRarity>(['common', 'rare', 'epic', 'legendary']);
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: Set<string>): boolean {
@@ -44,12 +65,26 @@ function isImage(value: unknown): value is UpgradeCardImage {
 function isEffect(value: unknown): value is UpgradeEffect {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const effect = value as Record<string, unknown>;
+  if (!hasOnlyKeys(effect, EFFECT_KEYS) || typeof effect.type !== 'string') return false;
+
+  const type = effect.type as UpgradeEffectType;
+  if (!EFFECT_TYPES.has(type) || typeof effect.abilityId !== 'string') return false;
+
+  if (STRING_VALUE_TYPES.has(type)) {
+    if (typeof effect.value !== 'string' || effect.value.trim().length === 0) return false;
+    if (type === 'ability-damage-target-type') return DAMAGE_TARGET_TYPES.has(effect.value);
+    if (type === 'ability-periodic-target-type' || type === 'ability-slow-target-type') {
+      return ENEMY_TARGET_TYPES.has(effect.value);
+    }
+    if (type === 'ability-periodic-visual-color') return HEX_COLOR_PATTERN.test(effect.value);
+    return true;
+  }
+
   return (
-    hasOnlyKeys(effect, EFFECT_KEYS) &&
-    typeof effect.type === 'string' && EFFECT_TYPES.has(effect.type as UpgradeEffectType) &&
-    typeof effect.abilityId === 'string' &&
-    typeof effect.value === 'number' && Number.isFinite(effect.value) && effect.value > 0 &&
-    (!String(effect.type).endsWith('-target-count') || Number.isInteger(effect.value))
+    typeof effect.value === 'number' &&
+    Number.isFinite(effect.value) &&
+    effect.value !== 0 &&
+    (!type.endsWith('-target-count') || Number.isInteger(effect.value))
   );
 }
 

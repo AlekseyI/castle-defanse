@@ -9,13 +9,32 @@ interface UpgradeChoiceProps {
   onSelect: (cardId: string) => void;
 }
 
+const TARGET_LABELS: Record<string, string> = {
+  'nearest-enemies': 'Ближайшие враги',
+  'random-enemies': 'Случайные враги',
+  'area-enemies': 'Область по высоте',
+  'all-enemies': 'Все враги',
+  castle: 'Замок',
+};
+
 function formatValue(effect: UpgradeEffect): string {
-  if (effect.type.endsWith('-critical-chance') || effect.type === 'ability-slow-percent') {
-    return `${effect.value >= 0 ? '+' : ''}${effect.value} п.п.`;
+  if (typeof effect.value === 'string') {
+    if (effect.type.endsWith('-target-type')) return TARGET_LABELS[effect.value] ?? effect.value;
+    return effect.value;
   }
-  if (effect.type.endsWith('-percent')) return `${effect.value >= 0 ? '+' : ''}${effect.value}%`;
-  if (effect.type.endsWith('-duration-flat')) return `${effect.value >= 0 ? '+' : ''}${effect.value} сек.`;
-  return `${effect.value >= 0 ? '+' : ''}${effect.value}`;
+
+  const prefix = effect.value >= 0 ? '+' : '';
+  if (
+    effect.type.endsWith('-critical-chance') ||
+    effect.type === 'ability-periodic-chance' ||
+    effect.type === 'ability-slow-percent' ||
+    effect.type.endsWith('-area-height')
+  ) {
+    return `${prefix}${effect.value} процентных пунктов`;
+  }
+  if (effect.type.endsWith('-percent')) return `${prefix}${effect.value}%`;
+  if (effect.type.endsWith('-duration-flat')) return `${prefix}${effect.value} сек.`;
+  return `${prefix}${effect.value}`;
 }
 
 export function UpgradeChoice({ onSelect }: UpgradeChoiceProps) {
