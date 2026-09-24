@@ -8,6 +8,11 @@ export const DEFAULT_MAPS: MapDefinition[] = [
       color: '#0b1020',
       fit: 'cover',
     },
+    upgradeSettings: {
+      enabled: false,
+      cardCount: 3,
+      rewardOnBossKill: false,
+    },
     waves: [
       {
         id: 'wave_1',
@@ -27,6 +32,7 @@ export const DEFAULT_MAPS: MapDefinition[] = [
             startWhen: 'field-clear',
           },
         ],
+        upgradeReward: { override: false, enabled: false, cardCount: 3 },
       },
       {
         id: 'wave_2',
@@ -46,6 +52,7 @@ export const DEFAULT_MAPS: MapDefinition[] = [
             startWhen: 'field-clear',
           },
         ],
+        upgradeReward: { override: false, enabled: false, cardCount: 3 },
       },
       {
         id: 'wave_3',
@@ -65,6 +72,7 @@ export const DEFAULT_MAPS: MapDefinition[] = [
             startWhen: 'field-clear',
           },
         ],
+        upgradeReward: { override: false, enabled: false, cardCount: 3 },
       },
     ],
     endless: {

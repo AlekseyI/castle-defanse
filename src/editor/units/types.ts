@@ -13,6 +13,7 @@ export interface UnitDefinition {
   damage: number;
   coinsOnDeath: number;
   isBoss: boolean;
+  grantsUpgradeOnKill: boolean;
   damageProtection?: DamageProtection;
   image?: UnitImage;
   /** Stable internal reference used by game waves. It is not editable in the unit editor. */

@@ -15,6 +15,7 @@ const map: MapDefinition = {
     color: '#0b1020',
     fit: 'cover',
   },
+  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
   waves: [
     {
       id: 'wave_1',
@@ -34,6 +35,7 @@ const map: MapDefinition = {
           startWhen: 'field-clear',
         },
       ],
+      upgradeReward: { override: false, enabled: false, cardCount: 3 },
     },
     {
       id: 'wave_2',
@@ -44,6 +46,7 @@ const map: MapDefinition = {
         spawnEvery: 0.8,
         startWhen: 'after-spawn',
       }],
+      upgradeReward: { override: false, enabled: false, cardCount: 3 },
     },
     {
       id: 'wave_3',
@@ -54,6 +57,7 @@ const map: MapDefinition = {
         spawnEvery: 0.5,
         startWhen: 'after-spawn',
       }],
+      upgradeReward: { override: false, enabled: false, cardCount: 3 },
     },
   ],
   endless: {
@@ -163,6 +167,7 @@ describe('waveLogic', () => {
       speed: 20,
       coinsOnDeath: 1,
       isBoss: true,
+      grantsUpgradeOnKill: false,
     };
     const runtime = getRuntimeUnit(unit, map.endless, 2);
 

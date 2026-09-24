@@ -682,3 +682,40 @@
   .waveGeneratorFields { grid-template-columns: 1fr; }
   .spawnBlock { grid-template-columns: 36px minmax(0, 1fr) 32px; padding: 10px; }
 }
+
+.rewardSettings {
+  margin: 14px 0;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(220px, 320px);
+  gap: 14px;
+  align-items: end;
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 14px;
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.checkboxField {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkboxField input {
+  width: 18px;
+  height: 18px;
+  accent-color: #06b6d4;
+}
+
+.rewardSettings .field small:not(.fieldError) {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .rewardSettings { grid-template-columns: 1fr; }
+}

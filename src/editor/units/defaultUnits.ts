@@ -10,6 +10,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 10,
     coinsOnDeath: 1,
     isBoss: false,
+    grantsUpgradeOnKill: false,
   },
   {
     id: 'wave_1_boss',
@@ -20,6 +21,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 24,
     coinsOnDeath: 1,
     isBoss: true,
+    grantsUpgradeOnKill: false,
   },
   {
     id: 'wave_2_enemy',
@@ -30,6 +32,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 11,
     coinsOnDeath: 1,
     isBoss: false,
+    grantsUpgradeOnKill: false,
   },
   {
     id: 'wave_2_boss',
@@ -40,6 +43,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 28,
     coinsOnDeath: 1,
     isBoss: true,
+    grantsUpgradeOnKill: false,
   },
   {
     id: 'wave_3_enemy',
@@ -50,6 +54,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 12,
     coinsOnDeath: 1,
     isBoss: false,
+    grantsUpgradeOnKill: false,
   },
   {
     id: 'wave_3_boss',
@@ -60,5 +65,6 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     damage: 34,
     coinsOnDeath: 1,
     isBoss: true,
+    grantsUpgradeOnKill: false,
   },
 ];

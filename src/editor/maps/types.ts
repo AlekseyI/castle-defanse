@@ -20,9 +20,22 @@ export interface WaveSpawnBlock {
   startWhen: WaveBlockStartCondition;
 }
 
+export interface MapUpgradeSettings {
+  enabled: boolean;
+  cardCount: number;
+  rewardOnBossKill: boolean;
+}
+
+export interface WaveUpgradeReward {
+  override: boolean;
+  enabled: boolean;
+  cardCount: number;
+}
+
 export interface MapWaveDefinition {
   id: string;
   blocks: WaveSpawnBlock[];
+  upgradeReward: WaveUpgradeReward;
 }
 
 export interface EndlessWaveSettings {
@@ -40,6 +53,7 @@ export interface MapDefinition {
   id: string;
   name: string;
   background: MapBackground;
+  upgradeSettings: MapUpgradeSettings;
   waves: MapWaveDefinition[];
   endless: EndlessWaveSettings;
 }

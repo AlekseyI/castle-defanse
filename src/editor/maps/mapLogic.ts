@@ -129,6 +129,7 @@ export function generateWaves(
     return {
       id: createId('wave'),
       blocks,
+      upgradeReward: { override: false, enabled: false, cardCount: 3 },
     };
   });
 }
@@ -157,6 +158,12 @@ export function findFirstUnitByNameSubstring<T extends UnitNameOption>(
   return units.find((unit) => unit.name.toLocaleLowerCase('ru').includes(normalizedQuery));
 }
 
+export function clampRepeatLastWaves(value: number, waveCount: number): number {
+  if (!Number.isFinite(value)) return value;
+  if (waveCount < 1) return 1;
+  return Math.min(waveCount, Math.max(1, Math.floor(value)));
+}
+
 export function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -175,6 +182,7 @@ export function createEmptyWave(unitId = ''): MapWaveDefinition {
   return {
     id: createId('wave'),
     blocks: [createEmptySpawnBlock(unitId)],
+    upgradeReward: { override: false, enabled: false, cardCount: 3 },
   };
 }
 
@@ -185,6 +193,11 @@ export function createEmptyMap(unitId = ''): MapDefinition {
     background: {
       color: '#0b1020',
       fit: 'cover',
+    },
+    upgradeSettings: {
+      enabled: false,
+      cardCount: 3,
+      rewardOnBossKill: false,
     },
     waves: [createEmptyWave(unitId)],
     endless: {
@@ -207,9 +220,11 @@ export function cloneMap(map: MapDefinition): MapDefinition {
       ...map.background,
       image: map.background.image ? { ...map.background.image } : undefined,
     },
+    upgradeSettings: { ...map.upgradeSettings },
     waves: map.waves.map((wave) => ({
       ...wave,
       blocks: wave.blocks.map((block) => ({ ...block })),
+      upgradeReward: { ...wave.upgradeReward },
     })),
     endless: { ...map.endless },
   };
@@ -235,6 +250,7 @@ export function normalizeMap(map: MapDefinition): MapDefinition {
         id: block.id.trim(),
         unitId: block.unitId.trim(),
       })),
+      upgradeReward: { ...wave.upgradeReward },
     })),
   });
 
@@ -264,9 +280,20 @@ export function validateMap(
     errors.backgroundColor = 'Укажите цвет в формате #RRGGBB.';
   }
 
+  if (!Number.isInteger(normalized.upgradeSettings.cardCount) || normalized.upgradeSettings.cardCount < 1) {
+    errors.upgradeCardCount = 'Количество карточек должно быть целым числом от 1.';
+  }
+
   normalized.waves.forEach((wave, waveIndex) => {
     if (wave.blocks.length === 0) {
       errors[`wave.${wave.id}`] = `Волна ${waveIndex + 1} должна содержать хотя бы один блок.`;
+    }
+
+    if (
+      wave.upgradeReward.override &&
+      (!Number.isInteger(wave.upgradeReward.cardCount) || wave.upgradeReward.cardCount < 1)
+    ) {
+      errors[`wave.${wave.id}.upgradeReward.cardCount`] = 'Количество карточек должно быть целым числом от 1.';
     }
 
     wave.blocks.forEach((block, blockIndex) => {

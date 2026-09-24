@@ -96,6 +96,7 @@ function getAbilityColor(ability: AbilityDefinition): string {
 
 export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBoardProps) {
   const phase = useGameStore((state) => state.phase);
+  const setBoardBusy = useGameStore((state) => state.setBoardBusy);
   const previousPhase = useRef(phase);
   const swipeStart = useRef<SwipeStart | null>(null);
   const suppressClickUntil = useRef(0);
@@ -117,23 +118,25 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
   useEffect(() => () => {
     if (swapTimer.current !== null) window.clearTimeout(swapTimer.current);
     board.destroy();
-  }, [board]);
+    setBoardBusy(false);
+  }, [board, setBoardBusy]);
 
   useEffect(() => {
-    if (phase === 'playing' && previousPhase.current !== 'playing') board.reset();
+    if (phase === 'playing' && (previousPhase.current === 'victory' || previousPhase.current === 'defeat')) board.reset();
     previousPhase.current = phase;
   }, [board, phase]);
 
   const animateSwap = useCallback((from: GridPoint, to: GridPoint) => {
     if (inactive || snapshot.locked || swapAnimation || !areAdjacent(from, to)) return;
 
+    setBoardBusy(true);
     setSwapAnimation({ from, to });
     swapTimer.current = window.setTimeout(() => {
-      void board.swap(from, to);
-      setSwapAnimation(null);
       swapTimer.current = null;
+      setSwapAnimation(null);
+      void board.swap(from, to).finally(() => setBoardBusy(false));
     }, BOARD_SWAP_ANIMATION_MS);
-  }, [board, inactive, snapshot.locked, swapAnimation]);
+  }, [board, inactive, setBoardBusy, snapshot.locked, swapAnimation]);
 
   const handleClick = useCallback((point: GridPoint) => {
     if (Date.now() < suppressClickUntil.current || swapAnimation) return;

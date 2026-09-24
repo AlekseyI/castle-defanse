@@ -75,6 +75,10 @@ export class Game {
     this.scene?.notifyAutoShuffle();
   }
 
+  continueAfterUpgrade() {
+    this.scene?.continueAfterUpgrade();
+  }
+
   private readonly scheduleResize = () => {
     if (this.disposed || !this.initialized) return;
     if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);

@@ -4,12 +4,22 @@ import { loadActiveMap } from '../editor/maps/mapStorage';
 import type { MapDefinition } from '../editor/maps/types';
 import type { AbilityDefinition, AbilityTarget, PeriodicDamageAbilityEffect, SlowAbilityEffect } from '../editor/abilities/types';
 import { loadUnits } from '../editor/units/unitStorage';
+import { loadUpgrades } from '../editor/upgrades/upgradeStorage';
+import type { UpgradeCardDefinition } from '../editor/upgrades/types';
 import type { UnitDefinition } from '../editor/units/types';
 import type { TileKind } from './types';
 import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
 import { getRuntimeSpawnBlock, getRuntimeUnit, getRuntimeWave, getWaveBlockStep } from './waveLogic';
 import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
+import { generateUpgradeChoices } from './upgrades/upgradeGenerator';
+import { applyAbilityRuntimeModifier } from './upgrades/upgradeCalculator';
+import {
+  earnsBossUpgradeReward,
+  resolveWaveUpgradeReward,
+  shouldShowUpgradeReward,
+  type EnemyExitReason,
+} from './upgrades/upgradeRewardLogic';
 import { SpellEffects } from './effects/SpellEffects';
 import { PeriodicDamageAura } from './effects/PeriodicDamageAura';
 import { formatDamagePopup, resolveDamageHit } from './damageLogic';
@@ -42,6 +52,7 @@ interface Enemy {
   frozenFor: number;
   slowPercent: number;
   isBoss: boolean;
+  grantsUpgradeOnKill: boolean;
 }
 
 interface ActiveBattleAreaEffect extends ActiveAreaEffect<Enemy> {
@@ -77,6 +88,7 @@ export class BattleScene extends Container {
   private readonly unitsById: Map<string, UnitDefinition>;
   private readonly map: MapDefinition;
   private readonly abilitiesById: Map<TileKind, AbilityDefinition>;
+  private readonly upgradeCards: UpgradeCardDefinition[];
   private layoutWidth = 0;
   private enemySpeedScale = 1;
 
@@ -91,6 +103,8 @@ export class BattleScene extends Container {
   private autoShuffleText: Text | null = null;
   private resultOverlay: Container | null = null;
   private cleanupDone = false;
+  private bossUpgradeRewardEarned = false;
+  private pendingWaveAdvance = false;
 
   constructor(app: Application) {
     super();
@@ -101,6 +115,7 @@ export class BattleScene extends Container {
     this.map = loadActiveMap();
     const abilities = loadAbilities();
     this.abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
+    this.upgradeCards = loadUpgrades();
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
     this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
@@ -115,7 +130,7 @@ export class BattleScene extends Container {
     this.layout();
 
     this.stateUnsubscribe = useGameStore.subscribe((state) => {
-      if (state.phase !== 'playing') this.showResult(state.phase);
+      if (state.phase === 'victory' || state.phase === 'defeat') this.showResult(state.phase);
     });
 
     this.app.ticker.add(this.update);
@@ -210,18 +225,59 @@ export class BattleScene extends Container {
   }
 
   private completeWave() {
+    const runtimeWave = getRuntimeWave(this.map, this.waveIndex);
     const nextWaveIndex = this.waveIndex + 1;
-    if (!getRuntimeWave(this.map, nextWaveIndex)) {
+    const hasNextWave = Boolean(getRuntimeWave(this.map, nextWaveIndex));
+    if (!runtimeWave || !hasNextWave) {
+      this.bossUpgradeRewardEarned = false;
+      this.pendingWaveAdvance = false;
       useGameStore.getState().setPhase('victory');
       return;
     }
 
-    this.waveIndex = nextWaveIndex;
+    const effectiveReward = resolveWaveUpgradeReward(
+      this.map.upgradeSettings,
+      runtimeWave.wave.upgradeReward,
+    );
+    const shouldReward = shouldShowUpgradeReward(
+      hasNextWave,
+      this.bossUpgradeRewardEarned,
+      effectiveReward.enabled,
+    );
+    const state = useGameStore.getState();
+    if (shouldReward && state.boardBusy) return;
+
+    this.bossUpgradeRewardEarned = false;
+
+    if (shouldReward) {
+      const choices = generateUpgradeChoices(
+        this.upgradeCards,
+        state.upgradeCounts,
+        effectiveReward.cardCount,
+      );
+      if (choices.length > 0) {
+        this.pendingWaveAdvance = true;
+        state.openUpgradeSelection(choices);
+        return;
+      }
+    }
+
+    this.advanceToNextWave();
+  }
+
+  private advanceToNextWave() {
+    this.pendingWaveAdvance = false;
+    this.waveIndex += 1;
     this.blockIndex = 0;
     this.spawnedThisBlock = 0;
     this.spawnTimer = 0.3;
     this.betweenWavesFor = 2;
     useGameStore.getState().setWave(this.waveIndex + 1);
+  }
+
+  continueAfterUpgrade() {
+    if (!this.pendingWaveAdvance || useGameStore.getState().phase !== 'playing') return;
+    this.advanceToNextWave();
   }
 
   private getUnit(unitId: string): UnitDefinition | undefined {
@@ -281,6 +337,7 @@ export class BattleScene extends Container {
       frozenFor: 0,
       slowPercent: 0,
       isBoss,
+      grantsUpgradeOnKill: unit.grantsUpgradeOnKill,
     };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
@@ -323,7 +380,7 @@ export class BattleScene extends Container {
 
       if (enemy.root.y >= this.castleY - 30) {
         useGameStore.getState().damageCastle(enemy.damage);
-        this.removeEnemy(enemy, i, false);
+        this.removeEnemy(enemy, i, 'reached-base');
       }
     }
   }
@@ -341,7 +398,7 @@ export class BattleScene extends Container {
 
     if (enemy.hp <= 0) {
       const index = this.enemies.indexOf(enemy);
-      if (index >= 0) this.removeEnemy(enemy, index, true);
+      if (index >= 0) this.removeEnemy(enemy, index, 'killed');
       return;
     }
     this.redrawEnemyHp(enemy);
@@ -375,14 +432,23 @@ export class BattleScene extends Container {
     }
   }
 
-  private removeEnemy(enemy: Enemy, index: number, killed: boolean) {
+  private removeEnemy(enemy: Enemy, index: number, reason: EnemyExitReason) {
     for (let i = this.activePeriodicDamages.length - 1; i >= 0; i -= 1) {
       if (this.activePeriodicDamages[i].target === enemy) this.removePeriodicDamageAt(i);
     }
 
     this.enemies.splice(index, 1);
     enemy.root.destroy({ children: true });
-    if (killed) useGameStore.getState().addKill(enemy.coinsOnDeath);
+    if (reason === 'killed') {
+      useGameStore.getState().addKill(enemy.coinsOnDeath);
+      if (earnsBossUpgradeReward(
+        enemy.isBoss,
+        this.map.upgradeSettings.rewardOnBossKill || enemy.grantsUpgradeOnKill,
+        reason,
+      )) {
+        this.bossUpgradeRewardEarned = true;
+      }
+    }
   }
 
   private redrawEnemyHp(enemy: Enemy) {
@@ -408,8 +474,9 @@ export class BattleScene extends Container {
 
   private cast(kind: TileKind, spendCharge = true) {
     const state = useGameStore.getState();
-    const ability = this.abilitiesById.get(kind);
-    if (!ability || ability.effects.length === 0) return;
+    const baseAbility = this.abilitiesById.get(kind);
+    if (!baseAbility || baseAbility.effects.length === 0) return;
+    const ability = applyAbilityRuntimeModifier(baseAbility, state.abilityModifiers[kind]);
 
     const resolvedEffects = ability.effects.map((effect) => ({
       effect,
@@ -843,6 +910,8 @@ export class BattleScene extends Container {
     this.spawnedThisBlock = 0;
     this.spawnTimer = 0;
     this.betweenWavesFor = 0;
+    this.bossUpgradeRewardEarned = false;
+    this.pendingWaveAdvance = false;
     useGameStore.getState().reset(
       this.map.endless.enabled ? 0 : this.map.waves.length,
       [...this.abilitiesById.keys()],

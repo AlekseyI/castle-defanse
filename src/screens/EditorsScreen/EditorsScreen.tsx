@@ -2,6 +2,7 @@ import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits } from '../../editor/units/unitStorage';
 import { loadMaps } from '../../editor/maps/mapStorage';
+import { loadUpgrades } from '../../editor/upgrades/upgradeStorage';
 import styles from './EditorsScreen.module.css';
 
 type EditorsScreenProps = {
@@ -10,13 +11,15 @@ type EditorsScreenProps = {
   onOpenAbilities: () => void;
   onOpenUnits: () => void;
   onOpenMaps: () => void;
+  onOpenUpgrades: () => void;
 };
 
-export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, onOpenUnits, onOpenMaps }: EditorsScreenProps) {
+export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, onOpenUnits, onOpenMaps, onOpenUpgrades }: EditorsScreenProps) {
   const damageSourcesCount = loadDamageSources().length;
   const abilitiesCount = loadAbilities().length;
   const unitsCount = loadUnits().length;
   const mapsCount = loadMaps().length;
+  const upgradesCount = loadUpgrades().length;
 
   return (
     <main className={styles.screen}>
@@ -51,6 +54,14 @@ export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, on
           <strong>Редактор юнитов</strong>
           <span>ID, название, изображение, HP, скорость и урон юнитов.</span>
           <small>Юнитов: {unitsCount}</small>
+        </button>
+
+
+        <button className={styles.card} type="button" onClick={onOpenUpgrades}>
+          <span className={styles.cardIcon} aria-hidden="true">🃏</span>
+          <strong>Редактор карточек улучшений</strong>
+          <span>Редкость, вес, лимит получений и набор эффектов способностей.</span>
+          <small>Карточек: {upgradesCount}</small>
         </button>
 
         <button className={styles.card} type="button" onClick={onOpenMaps}>

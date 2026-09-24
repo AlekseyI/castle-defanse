@@ -29,6 +29,7 @@ describe('unitStorage', () => {
         damage: 10,
         coinsOnDeath: 4,
         isBoss: false,
+        grantsUpgradeOnKill: false,
         damageProtection: { fire: -100 },
       },
     ];
@@ -40,7 +41,7 @@ describe('unitStorage', () => {
 
   it('rejects saved units without coinsOnDeath', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.units.v5', JSON.stringify([
+    window.localStorage.setItem('game.units.v6', JSON.stringify([
       {
         id: 'legacy_unit',
         name: 'Старый юнит',
@@ -57,7 +58,7 @@ describe('unitStorage', () => {
 
   it('rejects the old unit format without isBoss', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.units.v5', JSON.stringify([
+    window.localStorage.setItem('game.units.v6', JSON.stringify([
       {
         id: 'old_unit',
         name: 'Старый формат',
@@ -73,6 +74,22 @@ describe('unitStorage', () => {
     expect(loaded.some((unit) => unit.id === 'old_unit')).toBe(false);
   });
 
+
+  it('rejects the previous unit json without grantsUpgradeOnKill', () => {
+    installLocalStorage();
+    window.localStorage.setItem('game.units.v6', JSON.stringify([{
+      id: 'old_boss',
+      name: 'Старый босс',
+      hp: 100,
+      speed: 20,
+      damage: 10,
+      coinsOnDeath: 1,
+      isBoss: true,
+    }]));
+
+    expect(loadUnits()).toEqual(DEFAULT_UNITS);
+  });
+
   it('rejects saved protection values below -100%', () => {
     installLocalStorage();
     persistUnits([
@@ -84,6 +101,7 @@ describe('unitStorage', () => {
         damage: 10,
         coinsOnDeath: 1,
         isBoss: false,
+        grantsUpgradeOnKill: false,
         damageProtection: { fire: -101 },
       },
     ]);

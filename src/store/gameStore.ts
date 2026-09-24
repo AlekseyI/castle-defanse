@@ -1,6 +1,13 @@
 import { create } from 'zustand';
+import type { UpgradeCardDefinition } from '../editor/upgrades/types';
 import { MAX_CHARGES } from '../game/config';
 import type { SpellCharges, TileKind } from '../game/types';
+import {
+  addUpgradeEffectToModifiers,
+  type AbilityRuntimeModifiers,
+} from '../game/upgrades/upgradeCalculator';
+
+type GamePhase = 'playing' | 'upgrade-selection' | 'victory' | 'defeat';
 
 interface GameState {
   castleHp: number;
@@ -10,8 +17,12 @@ interface GameState {
   charges: SpellCharges;
   kills: number;
   coins: number;
-  phase: 'playing' | 'victory' | 'defeat';
+  phase: GamePhase;
   autoCastMatches: boolean;
+  boardBusy: boolean;
+  upgradeCounts: Record<string, number>;
+  upgradeChoices: UpgradeCardDefinition[];
+  abilityModifiers: AbilityRuntimeModifiers;
   addCharge: (kind: TileKind, amount: number) => void;
   handleMatch: (kind: TileKind, amount: number, cast: (kind: TileKind) => void) => void;
   spendCharge: (kind: TileKind) => boolean;
@@ -19,8 +30,11 @@ interface GameState {
   healCastle: (amount: number) => void;
   setWave: (wave: number) => void;
   addKill: (coins: number) => void;
-  setPhase: (phase: GameState['phase']) => void;
+  setPhase: (phase: GamePhase) => void;
   setAutoCastMatches: (enabled: boolean) => void;
+  setBoardBusy: (busy: boolean) => void;
+  openUpgradeSelection: (choices: UpgradeCardDefinition[]) => void;
+  selectUpgrade: (cardId: string) => boolean;
   reset: (totalWaves: number, abilityIds?: TileKind[]) => void;
 }
 
@@ -38,6 +52,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
   coins: 0,
   phase: 'playing',
   autoCastMatches: true,
+  boardBusy: false,
+  upgradeCounts: {},
+  upgradeChoices: [],
+  abilityModifiers: {},
 
   addCharge: (kind, amount) =>
     set((state) => ({
@@ -86,6 +104,37 @@ export const useGameStore = create<GameState>()((set, get) => ({
   addKill: (coins) => set((state) => ({ kills: state.kills + 1, coins: state.coins + coins })),
   setPhase: (phase) => set({ phase }),
   setAutoCastMatches: (enabled) => set({ autoCastMatches: enabled }),
+  setBoardBusy: (boardBusy) => set({ boardBusy }),
+
+  openUpgradeSelection: (choices) => {
+    if (choices.length === 0) return;
+    set({ upgradeChoices: choices, phase: 'upgrade-selection' });
+  },
+
+  selectUpgrade: (cardId) => {
+    const state = get();
+    if (state.phase !== 'upgrade-selection') return false;
+
+    const card = state.upgradeChoices.find((choice) => choice.id === cardId);
+    if (!card) return false;
+
+    const currentCount = state.upgradeCounts[card.id] ?? 0;
+    if (currentCount >= card.maxCount) return false;
+
+    const abilityModifiers: AbilityRuntimeModifiers = structuredClone(state.abilityModifiers);
+    for (const effect of card.effects) addUpgradeEffectToModifiers(abilityModifiers, effect);
+
+    set({
+      upgradeCounts: {
+        ...state.upgradeCounts,
+        [card.id]: currentCount + 1,
+      },
+      abilityModifiers,
+      upgradeChoices: [],
+      phase: 'playing',
+    });
+    return true;
+  },
 
   reset: (totalWaves, abilityIds = []) =>
     set({
@@ -96,5 +145,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
       charges: emptyCharges(abilityIds),
       kills: 0,
       phase: 'playing',
+      boardBusy: false,
+      upgradeCounts: {},
+      upgradeChoices: [],
+      abilityModifiers: {},
     }),
 }));

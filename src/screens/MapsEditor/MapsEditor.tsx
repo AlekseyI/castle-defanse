@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import {
+  clampRepeatLastWaves,
   cloneMap,
   createEmptyMap,
   createEmptySpawnBlock,
@@ -95,6 +96,7 @@ function duplicateWave(wave: MapWaveDefinition): MapWaveDefinition {
   return {
     id: createId('wave'),
     blocks: wave.blocks.map((block) => ({ ...block, id: createId('block') })),
+    upgradeReward: { ...wave.upgradeReward },
   };
 }
 
@@ -262,10 +264,17 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
   };
 
   const removeWave = (waveId: string) => {
-    setDraft((current) => ({
-      ...current,
-      waves: current.waves.filter((wave) => wave.id !== waveId),
-    }));
+    setDraft((current) => {
+      const waves = current.waves.filter((wave) => wave.id !== waveId);
+      return {
+        ...current,
+        waves,
+        endless: {
+          ...current.endless,
+          repeatLastWaves: clampRepeatLastWaves(current.endless.repeatLastWaves, waves.length),
+        },
+      };
+    });
   };
 
   const cloneWave = (waveId: string) => {
@@ -372,7 +381,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
       waves,
       endless: {
         ...current.endless,
-        repeatLastWaves: Math.min(current.endless.repeatLastWaves, waves.length),
+        repeatLastWaves: clampRepeatLastWaves(current.endless.repeatLastWaves, waves.length),
       },
     }));
   };
@@ -572,17 +581,21 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
               <div className={`${styles.formGrid} ${!draft.endless.enabled ? styles.disabledSection : ''}`}>
                 <label className={styles.field}>
-                  <span>Повторять последние волн</span>
+                  <span>Повторять последние волн (макс. {draft.waves.length})</span>
                   <input
                     type="number"
                     min="1"
+                    max={Math.max(1, draft.waves.length)}
                     step="1"
-                    disabled={!draft.endless.enabled}
+                    disabled={!draft.endless.enabled || draft.waves.length === 0}
                     value={Number.isFinite(draft.endless.repeatLastWaves) ? draft.endless.repeatLastWaves : ''}
                     aria-invalid={Boolean(validation.errors.repeatLastWaves)}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
-                      endless: { ...current.endless, repeatLastWaves: inputNumber(event.target.value) },
+                      endless: {
+                        ...current.endless,
+                        repeatLastWaves: clampRepeatLastWaves(inputNumber(event.target.value), current.waves.length),
+                      },
                     }))}
                   />
                   <small className={styles.fieldHint}>Сколько последних созданных вручную волн использовать как шаблон одного бесконечного цикла.</small>
@@ -707,6 +720,49 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   <p>Каждая волна состоит из последовательных блоков спавна.</p>
                 </div>
                 <button className={styles.primaryButton} type="button" onClick={addWave}>+ Добавить волну</button>
+              </div>
+
+              <div className={styles.rewardSettings}>
+                <label className={styles.checkboxField}>
+                  <input
+                    type="checkbox"
+                    checked={draft.upgradeSettings.enabled}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      upgradeSettings: { ...current.upgradeSettings, enabled: event.target.checked },
+                    }))}
+                  />
+                  <span>Доп. показывать карточки улучшения после каждой волны</span>
+                </label>
+
+                <label className={styles.field}>
+                  <span>Кол-во карточек</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={Number.isFinite(draft.upgradeSettings.cardCount) ? draft.upgradeSettings.cardCount : ''}
+                    aria-invalid={Boolean(validation.errors.upgradeCardCount)}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      upgradeSettings: { ...current.upgradeSettings, cardCount: inputNumber(event.target.value) },
+                    }))}
+                  />
+                  <small>Значение по умолчанию для всех волн и награды за босса.</small>
+                  {validation.errors.upgradeCardCount && <small className={styles.fieldError}>{validation.errors.upgradeCardCount}</small>}
+                </label>
+
+                <label className={styles.checkboxField}>
+                  <input
+                    type="checkbox"
+                    checked={draft.upgradeSettings.rewardOnBossKill}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      upgradeSettings: { ...current.upgradeSettings, rewardOnBossKill: event.target.checked },
+                    }))}
+                  />
+                  <span>Показывать карточки после убийства босса</span>
+                </label>
               </div>
 
               <div className={styles.waveGenerator}>
@@ -927,6 +983,61 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                       {validation.errors[`wave.${wave.id}`] && (
                         <small className={styles.fieldError}>{validation.errors[`wave.${wave.id}`]}</small>
                       )}
+
+                      <div className={styles.rewardSettings}>
+                        <label className={styles.checkboxField}>
+                          <input
+                            type="checkbox"
+                            checked={wave.upgradeReward.override}
+                            onChange={(event) => updateWave(wave.id, (currentWave) => ({
+                              ...currentWave,
+                              upgradeReward: event.target.checked
+                                ? {
+                                    override: true,
+                                    enabled: draft.upgradeSettings.enabled,
+                                    cardCount: draft.upgradeSettings.cardCount,
+                                  }
+                                : { ...currentWave.upgradeReward, override: false },
+                            }))}
+                          />
+                          <span>Переопределить общие настройки карточек для этой волны</span>
+                        </label>
+
+                        <label className={styles.checkboxField}>
+                          <input
+                            type="checkbox"
+                            disabled={!wave.upgradeReward.override}
+                            checked={wave.upgradeReward.override ? wave.upgradeReward.enabled : draft.upgradeSettings.enabled}
+                            onChange={(event) => updateWave(wave.id, (currentWave) => ({
+                              ...currentWave,
+                              upgradeReward: { ...currentWave.upgradeReward, enabled: event.target.checked },
+                            }))}
+                          />
+                          <span>Показывать карточки улучшений после волны</span>
+                        </label>
+
+                        <label className={styles.field}>
+                          <span>Количество карточек при награде</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            disabled={!wave.upgradeReward.override}
+                            value={Number.isFinite(wave.upgradeReward.override ? wave.upgradeReward.cardCount : draft.upgradeSettings.cardCount)
+                              ? (wave.upgradeReward.override ? wave.upgradeReward.cardCount : draft.upgradeSettings.cardCount)
+                              : ''}
+                            aria-invalid={Boolean(validation.errors[`wave.${wave.id}.upgradeReward.cardCount`])}
+                            onChange={(event) => updateWave(wave.id, (currentWave) => ({
+                              ...currentWave,
+                              upgradeReward: { ...currentWave.upgradeReward, cardCount: inputNumber(event.target.value) },
+                            }))}
+                          />
+                          <small>При включённом переопределении используется вместо общего количества, в том числе для награды за босса этой волны.</small>
+                          {validation.errors[`wave.${wave.id}.upgradeReward.cardCount`] && (
+                            <small className={styles.fieldError}>{validation.errors[`wave.${wave.id}.upgradeReward.cardCount`]}</small>
+                          )}
+                        </label>
+                      </div>
 
                       <button className={styles.addBlockButton} type="button" onClick={() => addBlock(wave.id)}>
                         + Добавить блок спавна

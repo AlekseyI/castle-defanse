@@ -117,3 +117,84 @@ describe('gameStore', () => {
     expect(state.charges).toEqual({ fire: 0, ice: 0, lightning: 0, shield: 0 });
   });
 });
+
+// Upgrade selection state is covered here because it belongs to the run store, not to React UI.
+describe('gameStore upgrades', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset(3, ['fire']);
+  });
+
+  it('opens upgrade selection and applies all effects of the chosen card', () => {
+    const card = {
+      id: 'hellfire',
+      name: 'Адское пламя',
+      description: '',
+      rarity: 'rare' as const,
+      weight: 100,
+      maxCount: 2,
+      effects: [
+        { type: 'ability-damage-percent' as const, abilityId: 'fire', value: 20 },
+        { type: 'ability-periodic-damage-percent' as const, abilityId: 'fire', value: 15 },
+      ],
+    };
+
+    useGameStore.getState().openUpgradeSelection([card]);
+    expect(useGameStore.getState().phase).toBe('upgrade-selection');
+    expect(useGameStore.getState().selectUpgrade(card.id)).toBe(true);
+
+    const state = useGameStore.getState();
+    expect(state.phase).toBe('playing');
+    expect(state.upgradeCounts.hellfire).toBe(1);
+    expect(state.upgradeChoices).toEqual([]);
+    expect(state.abilityModifiers.fire.damage.amountPercent).toBe(20);
+    expect(state.abilityModifiers.fire.periodicDamage.amountPercent).toBe(15);
+  });
+
+  it('does not allow selecting a card outside the current choices or beyond maxCount', () => {
+    const card = {
+      id: 'single',
+      name: 'Один раз',
+      description: '',
+      rarity: 'common' as const,
+      weight: 100,
+      maxCount: 1,
+      effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
+    };
+
+    expect(useGameStore.getState().selectUpgrade(card.id)).toBe(false);
+    useGameStore.getState().openUpgradeSelection([card]);
+    expect(useGameStore.getState().selectUpgrade(card.id)).toBe(true);
+    useGameStore.getState().openUpgradeSelection([card]);
+    expect(useGameStore.getState().selectUpgrade(card.id)).toBe(false);
+  });
+
+
+  it('clears match board busy state on a new run', () => {
+    useGameStore.getState().setBoardBusy(true);
+    expect(useGameStore.getState().boardBusy).toBe(true);
+
+    useGameStore.getState().reset(4, ['fire']);
+    expect(useGameStore.getState().boardBusy).toBe(false);
+  });
+
+  it('clears upgrade state on a new run', () => {
+    const card = {
+      id: 'fire_flat',
+      name: 'Жар',
+      description: '',
+      rarity: 'common' as const,
+      weight: 100,
+      maxCount: 3,
+      effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
+    };
+
+    useGameStore.getState().openUpgradeSelection([card]);
+    useGameStore.getState().selectUpgrade(card.id);
+    useGameStore.getState().reset(4, ['fire']);
+
+    const state = useGameStore.getState();
+    expect(state.upgradeCounts).toEqual({});
+    expect(state.upgradeChoices).toEqual([]);
+    expect(state.abilityModifiers).toEqual({});
+  });
+});

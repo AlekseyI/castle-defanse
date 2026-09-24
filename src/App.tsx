@@ -5,9 +5,10 @@ import { EditorsScreen } from './screens/EditorsScreen/EditorsScreen';
 import { GameScreen } from './screens/GameScreen/GameScreen';
 import { MapsEditor } from './screens/MapsEditor/MapsEditor';
 import { UnitsEditor } from './screens/UnitsEditor/UnitsEditor';
+import { UpgradesEditor } from './screens/UpgradesEditor/UpgradesEditor';
 import styles from './App.module.css';
 
-type AppScreen = 'main' | 'game' | 'editors' | 'damage-sources' | 'abilities' | 'units' | 'maps';
+type AppScreen = 'main' | 'game' | 'editors' | 'damage-sources' | 'abilities' | 'units' | 'maps' | 'upgrades';
 
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('main');
@@ -31,6 +32,7 @@ export default function App() {
         onOpenAbilities={() => setScreen('abilities')}
         onOpenUnits={() => setScreen('units')}
         onOpenMaps={() => setScreen('maps')}
+        onOpenUpgrades={() => setScreen('upgrades')}
       />
     );
   }
@@ -56,6 +58,15 @@ export default function App() {
   if (screen === 'units') {
     return (
       <UnitsEditor
+        onBackToMain={() => setScreen('main')}
+        onBackToEditors={() => setScreen('editors')}
+      />
+    );
+  }
+
+  if (screen === 'upgrades') {
+    return (
+      <UpgradesEditor
         onBackToMain={() => setScreen('main')}
         onBackToEditors={() => setScreen('editors')}
       />

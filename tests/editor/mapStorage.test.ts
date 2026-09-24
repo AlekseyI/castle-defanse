@@ -24,6 +24,7 @@ const customMap: MapDefinition = {
     color: '#101827',
     fit: 'cover',
   },
+  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
   waves: [{
     id: 'wave_a',
     blocks: [{
@@ -33,6 +34,7 @@ const customMap: MapDefinition = {
       spawnEvery: 0.8,
       startWhen: 'after-spawn',
     }],
+    upgradeReward: { override: false, enabled: false, cardCount: 3 },
   }],
   endless: {
     enabled: false,
@@ -79,7 +81,7 @@ describe('mapStorage', () => {
 
   it('rejects old or incomplete map json instead of migrating it', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.maps.v1', JSON.stringify([{
+    window.localStorage.setItem('game.maps.v2', JSON.stringify([{
       id: 'legacy',
       name: 'Старая карта',
       background: '#000000',
@@ -91,7 +93,7 @@ describe('mapStorage', () => {
 
   it('rejects unknown fields in the new format', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.maps.v1', JSON.stringify([{
+    window.localStorage.setItem('game.maps.v2', JSON.stringify([{
       ...customMap,
       legacyWaveMode: true,
     }]));

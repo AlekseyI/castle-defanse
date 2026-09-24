@@ -1,7 +1,7 @@
 import { DEFAULT_UNITS } from './defaultUnits';
 import type { DamageProtection, UnitDefinition, UnitImage } from './types';
 
-const STORAGE_KEY = 'game.units.v5';
+const STORAGE_KEY = 'game.units.v6';
 
 function hasOnlyFields(value: Record<string, unknown>, fields: string[]): boolean {
   return Object.keys(value).every((key) => fields.includes(key));
@@ -35,7 +35,7 @@ function isUnit(value: unknown): value is UnitDefinition {
 
   const unit = value as Record<string, unknown>;
   return (
-    hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'coinsOnDeath', 'isBoss', 'damageProtection', 'image', 'gameKey']) &&
+    hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'coinsOnDeath', 'isBoss', 'grantsUpgradeOnKill', 'damageProtection', 'image', 'gameKey']) &&
     typeof unit.id === 'string' &&
     typeof unit.name === 'string' &&
     typeof unit.hp === 'number' && Number.isFinite(unit.hp) &&
@@ -43,6 +43,7 @@ function isUnit(value: unknown): value is UnitDefinition {
     typeof unit.damage === 'number' && Number.isFinite(unit.damage) &&
     typeof unit.coinsOnDeath === 'number' && Number.isFinite(unit.coinsOnDeath) && unit.coinsOnDeath >= 0 &&
     typeof unit.isBoss === 'boolean' &&
+    typeof unit.grantsUpgradeOnKill === 'boolean' &&
     (unit.damageProtection === undefined || isDamageProtection(unit.damageProtection)) &&
     (unit.image === undefined || isUnitImage(unit.image)) &&
     (unit.gameKey === undefined || typeof unit.gameKey === 'string')

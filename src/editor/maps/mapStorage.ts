@@ -4,16 +4,20 @@ import type {
   MapBackground,
   MapDefinition,
   MapImage,
+  MapUpgradeSettings,
   MapWaveDefinition,
+  WaveUpgradeReward,
   WaveSpawnBlock,
 } from './types';
 
-const STORAGE_KEY = 'game.maps.v1';
-const ACTIVE_MAP_STORAGE_KEY = 'game.maps.active.v1';
-const MAP_KEYS = new Set(['id', 'name', 'background', 'waves', 'endless']);
+const STORAGE_KEY = 'game.maps.v2';
+const ACTIVE_MAP_STORAGE_KEY = 'game.maps.active.v2';
+const MAP_KEYS = new Set(['id', 'name', 'background', 'upgradeSettings', 'waves', 'endless']);
 const BACKGROUND_KEYS = new Set(['color', 'fit', 'image']);
 const IMAGE_KEYS = new Set(['name', 'src']);
-const WAVE_KEYS = new Set(['id', 'blocks']);
+const MAP_UPGRADE_SETTINGS_KEYS = new Set(['enabled', 'cardCount', 'rewardOnBossKill']);
+const WAVE_KEYS = new Set(['id', 'blocks', 'upgradeReward']);
+const UPGRADE_REWARD_KEYS = new Set(['override', 'enabled', 'cardCount']);
 const BLOCK_KEYS = new Set(['id', 'unitId', 'count', 'spawnEvery', 'startWhen']);
 const ENDLESS_KEYS = new Set([
   'enabled',
@@ -60,6 +64,29 @@ function isBlock(value: unknown): value is WaveSpawnBlock {
   );
 }
 
+
+function isMapUpgradeSettings(value: unknown): value is MapUpgradeSettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const settings = value as Record<string, unknown>;
+  return (
+    hasOnlyKeys(settings, MAP_UPGRADE_SETTINGS_KEYS) &&
+    typeof settings.enabled === 'boolean' &&
+    typeof settings.cardCount === 'number' && Number.isInteger(settings.cardCount) && settings.cardCount >= 1 &&
+    typeof settings.rewardOnBossKill === 'boolean'
+  );
+}
+
+function isUpgradeReward(value: unknown): value is WaveUpgradeReward {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const reward = value as Record<string, unknown>;
+  return (
+    hasOnlyKeys(reward, UPGRADE_REWARD_KEYS) &&
+    typeof reward.override === 'boolean' &&
+    typeof reward.enabled === 'boolean' &&
+    typeof reward.cardCount === 'number' && Number.isInteger(reward.cardCount) && reward.cardCount >= 1
+  );
+}
+
 function isWave(value: unknown): value is MapWaveDefinition {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const wave = value as Record<string, unknown>;
@@ -67,7 +94,8 @@ function isWave(value: unknown): value is MapWaveDefinition {
     hasOnlyKeys(wave, WAVE_KEYS) &&
     typeof wave.id === 'string' &&
     Array.isArray(wave.blocks) &&
-    wave.blocks.every(isBlock)
+    wave.blocks.every(isBlock) &&
+    isUpgradeReward(wave.upgradeReward)
   );
 }
 
@@ -95,6 +123,7 @@ function isMap(value: unknown): value is MapDefinition {
     typeof map.id === 'string' &&
     typeof map.name === 'string' &&
     isBackground(map.background) &&
+    isMapUpgradeSettings(map.upgradeSettings) &&
     Array.isArray(map.waves) &&
     map.waves.every(isWave) &&
     isEndless(map.endless)
@@ -108,9 +137,11 @@ function cloneDefaults(): MapDefinition[] {
       ...map.background,
       image: map.background.image ? { ...map.background.image } : undefined,
     },
+    upgradeSettings: { ...map.upgradeSettings },
     waves: map.waves.map((wave) => ({
       ...wave,
       blocks: wave.blocks.map((block) => ({ ...block })),
+      upgradeReward: { ...wave.upgradeReward },
     })),
     endless: { ...map.endless },
   }));
@@ -158,9 +189,11 @@ export function loadActiveMap(): MapDefinition {
       ...fallback.background,
       image: fallback.background.image ? { ...fallback.background.image } : undefined,
     },
+    upgradeSettings: { ...fallback.upgradeSettings },
     waves: fallback.waves.map((wave) => ({
       ...wave,
       blocks: wave.blocks.map((block) => ({ ...block })),
+      upgradeReward: { ...wave.upgradeReward },
     })),
     endless: { ...fallback.endless },
   };

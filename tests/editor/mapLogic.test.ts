@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampRepeatLastWaves,
   cloneMap,
   filterUnitsByNameSubstring,
   findFirstUnitByNameSubstring,
@@ -18,6 +19,7 @@ const map: MapDefinition = {
     color: '#0b1020',
     fit: 'cover',
   },
+  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
   waves: [
     {
       id: 'wave_1',
@@ -37,6 +39,7 @@ const map: MapDefinition = {
           startWhen: 'field-clear',
         },
       ],
+      upgradeReward: { override: false, enabled: false, cardCount: 3 },
     },
   ],
   endless: {
@@ -52,6 +55,29 @@ const map: MapDefinition = {
 };
 
 describe('mapLogic', () => {
+  it('clamps endless repeat count to the number of created waves', () => {
+    expect(clampRepeatLastWaves(10, 4)).toBe(4);
+    expect(clampRepeatLastWaves(0, 4)).toBe(1);
+    expect(clampRepeatLastWaves(3.9, 4)).toBe(3);
+  });
+
+  it('ignores an invalid per-wave cardCount while the wave inherits map upgrade settings', () => {
+    const result = validateMap(
+      {
+        ...map,
+        waves: [{
+          ...map.waves[0],
+          upgradeReward: { override: false, enabled: false, cardCount: Number.NaN },
+        }],
+      },
+      [map],
+      ['slime'],
+      map.id,
+    );
+
+    expect(result.errors['wave.wave_1.upgradeReward.cardCount']).toBeUndefined();
+  });
+
   it('normalizes map metadata and background image without changing wave settings', () => {
     expect(normalizeMap({
       ...map,
@@ -84,6 +110,7 @@ describe('mapLogic', () => {
     const result = validateMap(
       {
         ...map,
+        upgradeSettings: { ...map.upgradeSettings, cardCount: 0 },
         waves: [{
           id: 'wave_1',
           blocks: [{
@@ -93,6 +120,7 @@ describe('mapLogic', () => {
             spawnEvery: -1,
             startWhen: 'after-spawn',
           }],
+          upgradeReward: { override: true, enabled: false, cardCount: 0 },
         }],
         endless: {
           ...map.endless,
@@ -105,9 +133,11 @@ describe('mapLogic', () => {
     );
 
     expect(result.valid).toBe(false);
+    expect(result.errors.upgradeCardCount).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.unitId']).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.count']).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.spawnEvery']).toBeTruthy();
+    expect(result.errors['wave.wave_1.upgradeReward.cardCount']).toBeTruthy();
     expect(result.errors.repeatLastWaves).toBeTruthy();
   });
 
@@ -217,9 +247,9 @@ describe('mapLogic', () => {
 
   it('moves waves up and down by their visible index without mutating the source list', () => {
     const waves = [
-      { id: 'wave_1', blocks: [] },
-      { id: 'wave_2', blocks: [] },
-      { id: 'wave_3', blocks: [] },
+      { id: 'wave_1', blocks: [], upgradeReward: { override: false, enabled: false, cardCount: 3 } },
+      { id: 'wave_2', blocks: [], upgradeReward: { override: false, enabled: false, cardCount: 3 } },
+      { id: 'wave_3', blocks: [], upgradeReward: { override: false, enabled: false, cardCount: 3 } },
     ];
 
     const movedDown = moveWaveByIndex(waves, 0, 1);
@@ -246,10 +276,14 @@ describe('mapLogic', () => {
 
   it('deep-clones background, waves and endless settings for editor drafts', () => {
     const cloned = cloneMap(map);
+    cloned.upgradeSettings.cardCount = 9;
     cloned.waves[0].blocks[0].count = 99;
     cloned.endless.hpGrowthPercent = 50;
+    cloned.waves[0].upgradeReward.cardCount = 7;
 
+    expect(map.upgradeSettings.cardCount).toBe(3);
     expect(map.waves[0].blocks[0].count).toBe(5);
+    expect(map.waves[0].upgradeReward.cardCount).toBe(3);
     expect(map.endless.hpGrowthPercent).toBe(10);
   });
 });
