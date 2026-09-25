@@ -37,13 +37,28 @@ export function GameScreen() {
     gameRef.current?.continueAfterUpgrade();
   }, []);
 
+  const handleUpgradeRefresh = useCallback(() => {
+    gameRef.current?.refreshUpgradeChoices();
+  }, []);
+
+  const handleUpgradeDismiss = useCallback(() => {
+    if (!useGameStore.getState().dismissUpgradeSelection()) return;
+    gameRef.current?.continueAfterUpgrade();
+  }, []);
+
   return (
     <div className={styles.screen}>
       <GameHud coveredByResult={coveredByResult} onCast={handleCast} />
       <GameViewport onGameReady={handleGameReady} />
       <AutoCastToggle coveredByResult={coveredByResult} />
       <MatchBoard disabled={!gameReady} onMatch={handleMatch} onAutoShuffle={handleAutoShuffle} />
-      {phase === 'upgrade-selection' && <UpgradeChoice onSelect={handleUpgradeSelect} />}
+      {phase === 'upgrade-selection' && (
+        <UpgradeChoice
+          onSelect={handleUpgradeSelect}
+          onRefresh={handleUpgradeRefresh}
+          onDismiss={handleUpgradeDismiss}
+        />
+      )}
     </div>
   );
 }

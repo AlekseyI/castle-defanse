@@ -39,6 +39,59 @@
   font-size: clamp(24px, 4vw, 34px);
 }
 
+.headerActions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.refreshButton,
+.dismissButton {
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(103, 232, 249, 0.34);
+  border-radius: 12px;
+  background: rgba(8, 47, 73, 0.72);
+  color: #cffafe;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+
+.refreshButton {
+  width: 42px;
+  padding: 0;
+}
+
+.dismissButton {
+  padding: 0 14px;
+}
+
+.refreshButton:hover,
+.dismissButton:hover {
+  border-color: rgba(103, 232, 249, 0.72);
+  background: rgba(8, 72, 94, 0.92);
+}
+
+.refreshButton:active,
+.dismissButton:active {
+  transform: scale(.96);
+}
+
+.refreshButton svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

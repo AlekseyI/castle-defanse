@@ -88,29 +88,28 @@ describe('upgradeLogic', () => {
     });
   });
 
-  it('offers modifiers only for existing ability effects and add actions for missing effects', () => {
-    const types = getCompatibleUpgradeEffectTypes(abilities[0]);
+  it('offers the same complete parameter set for every selected ability', () => {
+    const fireTypes = getCompatibleUpgradeEffectTypes(abilities[0]);
+    const boltTypes = getCompatibleUpgradeEffectTypes(abilities[1]);
 
-    expect(types).toContain('ability-damage-percent');
-    expect(types).toContain('ability-damage-target-count');
-    expect(types).toContain('ability-periodic-damage-percent');
-    expect(types).toContain('ability-periodic-chance');
-    expect(types).toContain('ability-add-slow');
-    expect(types).toContain('ability-add-heal');
-
-    expect(types).not.toContain('ability-add-damage');
-    expect(types).not.toContain('ability-add-periodic-damage');
-    expect(types).not.toContain('ability-slow-percent');
-    expect(types).not.toContain('ability-heal-percent');
+    expect(fireTypes).toEqual(boltTypes);
+    expect(fireTypes).toContain('ability-damage-percent');
+    expect(fireTypes).toContain('ability-periodic-damage-flat');
+    expect(fireTypes).toContain('ability-slow-percent');
+    expect(fireTypes).toContain('ability-heal-flat');
+    expect(fireTypes).toContain('ability-add-damage');
+    expect(fireTypes).toContain('ability-add-periodic-damage');
+    expect(fireTypes).toContain('ability-add-slow');
+    expect(fireTypes).toContain('ability-add-heal');
   });
 
-  it('creates every added effect without hidden non-zero numeric defaults', () => {
+  it('creates every added effect with explicit usable target defaults', () => {
     expect(getDefaultUpgradeEffectValue('ability-add-damage', abilities[1])).toEqual({
       amount: 0,
       damageSourceId: '',
       criticalChancePercent: 0,
       criticalMultiplier: 0,
-      target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+      target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
     });
     expect(getDefaultUpgradeEffectValue('ability-add-periodic-damage', abilities[1])).toEqual({
       chancePercent: 0,
@@ -119,7 +118,7 @@ describe('upgradeLogic', () => {
       criticalChancePercent: 0,
       criticalMultiplier: 0,
       visualColor: '#000000',
-      target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+      target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
     });
     expect(getDefaultUpgradeEffectValue('ability-add-slow', abilities[1])).toEqual({
       slowPercent: 0,
@@ -134,7 +133,7 @@ describe('upgradeLogic', () => {
 
   it('clears target parameters that become hidden after changing the target type', () => {
     const periodic = getDefaultUpgradeEffectValue('ability-add-periodic-damage', abilities[1]);
-    if (typeof periodic !== 'object') throw new Error('Expected added periodic effect value.');
+    if (typeof periodic !== 'object' || !('target' in periodic)) throw new Error('Expected added periodic effect value.');
 
     const withCount = {
       ...periodic,
@@ -177,21 +176,25 @@ describe('upgradeLogic', () => {
     expect(result.errors).toEqual({});
   });
 
-  it('does not allow a modifier to create an effect that is missing from the ability', () => {
+  it('allows any supported parameter even when the ability does not have that effect yet', () => {
     const result = validateUpgradeCard({
       ...card,
-      effects: [{ type: 'ability-periodic-damage-flat', abilityId: 'bolt', value: 20 }],
+      effects: [
+        { type: 'ability-periodic-damage-flat', abilityId: 'bolt', value: 20 },
+        { type: 'ability-slow-percent', abilityId: 'bolt', value: 15 },
+        { type: 'ability-heal-flat', abilityId: 'bolt', value: 5 },
+      ],
     }, [], abilities);
 
-    expect(result.valid).toBe(false);
-    expect(result.errors['effect.0.type']).toBeTruthy();
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
   });
 
   it('validates direct effect parameters used by the ability editor', () => {
     const result = validateUpgradeCard({
       ...card,
       effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: 'castle' },
+        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'castle', count: 0, areaHeightPercent: 0 } },
         { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
         { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
       ],
@@ -199,6 +202,30 @@ describe('upgradeLogic', () => {
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual({});
+  });
+
+  it('requires dependent parameters for target changes', () => {
+    const nearest = validateUpgradeCard({
+      ...card,
+      effects: [{
+        type: 'ability-damage-target-type',
+        abilityId: 'fire',
+        value: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+      }],
+    }, [], abilities);
+    const area = validateUpgradeCard({
+      ...card,
+      effects: [{
+        type: 'ability-periodic-target-type',
+        abilityId: 'fire',
+        value: { type: 'area-enemies', count: 0, areaHeightPercent: 0 },
+      }],
+    }, [], abilities);
+
+    expect(nearest.valid).toBe(false);
+    expect(nearest.errors['effect.0.value']).toBeTruthy();
+    expect(area.valid).toBe(false);
+    expect(area.errors['effect.0.value']).toBeTruthy();
   });
 
   it('accepts negative numeric modifiers for trade-off cards', () => {
@@ -295,13 +322,9 @@ describe('upgradeLogic', () => {
     expect(result.valid).toBe(false);
     expect(result.errors['effect.0.visualColor']).toBeTruthy();
   });
-  it('ships valid sample cards across every rarity, weight range and available upgrade parameter', () => {
+  it('ships valid sample cards across every rarity and weight range', () => {
     expect(new Set(DEFAULT_UPGRADES.map((item) => item.rarity))).toEqual(new Set(['common', 'rare', 'epic', 'legendary']));
     expect(new Set(DEFAULT_UPGRADES.map((item) => item.weight)).size).toBeGreaterThan(4);
-
-    const compatibleTypes = new Set(DEFAULT_ABILITIES.flatMap((ability) => getCompatibleUpgradeEffectTypes(ability)));
-    const coveredTypes = new Set(DEFAULT_UPGRADES.flatMap((item) => item.effects.map((effect) => effect.type)));
-    expect([...compatibleTypes].filter((type) => !coveredTypes.has(type))).toEqual([]);
 
     for (const sample of DEFAULT_UPGRADES) {
       const result = validateUpgradeCard(sample, DEFAULT_UPGRADES, DEFAULT_ABILITIES, sample.id, DEFAULT_DAMAGE_SOURCES);

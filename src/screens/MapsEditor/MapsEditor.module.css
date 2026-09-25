@@ -282,33 +282,6 @@
   letter-spacing: 0.03em;
 }
 
-.field input,
-.field select {
-  width: 100%;
-  min-height: 42px;
-  padding: 9px 11px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  outline: none;
-  background: #080f1d;
-  color: #f8fafc;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: normal;
-}
-
-.field input:focus,
-.field select:focus {
-  border-color: #22d3ee;
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
-}
-
-.field input[aria-invalid='true'],
-.field select[aria-invalid='true'] {
-  border-color: #fb7185;
-}
-
 .fieldError {
   color: #fda4af;
   font-size: 11px;
@@ -329,26 +302,20 @@
   gap: 6px;
 }
 
-.unitPicker input[type='search'] {
-  min-height: 42px;
-  font-size: 14px;
-}
-
-.compactField input,
-.compactField select {
-  min-height: 42px;
-}
-
 .fileButton {
   position: relative;
   overflow: hidden;
 }
 
-.fileButton input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+
+
+.backgroundColorInput {
+  min-height: 42px !important;
+  padding: 3px !important;
+}
+
+.mapCheckbox {
+  accent-color: #06b6d4;
 }
 
 .backgroundLayout {
@@ -400,11 +367,6 @@
   gap: 8px;
 }
 
-.colorInput {
-  min-height: 42px !important;
-  padding: 3px !important;
-}
-
 .fileInfo {
   padding: 12px;
   display: grid;
@@ -416,7 +378,6 @@
 
 .fileInfo span { color: #94a3b8; font-size: 11px; font-weight: 800; }
 .fileInfo strong { overflow-wrap: anywhere; color: #e2e8f0; font-size: 13px; }
-
 
 .waveGenerator {
   margin-top: 16px;
@@ -599,12 +560,6 @@
   cursor: pointer;
 }
 
-.switchLabel input {
-  width: 18px;
-  height: 18px;
-  accent-color: #06b6d4;
-}
-
 .disabledSection { opacity: 0.52; }
 
 .emptyState {
@@ -624,7 +579,8 @@
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 250px minmax(0, 1fr); }
-  .backgroundLayout { grid-template-columns: 1fr; }
+  
+.backgroundLayout { grid-template-columns: 1fr; }
   .sectionHeading,
   .editorHeader,
   .waveHeader,
@@ -703,12 +659,6 @@
   color: #e2e8f0;
   font-size: 13px;
   font-weight: 800;
-}
-
-.checkboxField input {
-  width: 18px;
-  height: 18px;
-  accent-color: #06b6d4;
 }
 
 .rewardSettings .field small:not(.fieldError) {

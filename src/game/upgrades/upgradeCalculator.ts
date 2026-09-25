@@ -1,10 +1,11 @@
 import type {
   AbilityDefinition,
   AbilityEffect,
+  AbilityEffectType,
   AbilityTarget,
   AbilityTargetType,
 } from '../../editor/abilities/types';
-import type { UpgradeCardDefinition, UpgradeEffect } from '../../editor/upgrades/types';
+import type { UpgradeCardDefinition, UpgradeEffect, UpgradeTargetValue } from '../../editor/upgrades/types';
 
 const DEFAULT_AOE_HEIGHT_PERCENT = 50;
 
@@ -14,7 +15,7 @@ export interface EffectRuntimeModifier {
   amountFlat: number;
   durationPercent: number;
   durationFlat: number;
-  targetType?: AbilityTargetType;
+  targetOverride?: AbilityTarget;
   targetCountBonus: number;
   areaHeightPercentBonus: number;
   damageSourceId?: string;
@@ -74,11 +75,7 @@ function activate(modifier: EffectRuntimeModifier): EffectRuntimeModifier {
   return modifier;
 }
 
-function addedTargetToAbilityTarget(target: {
-  type: AbilityTargetType;
-  count: number;
-  areaHeightPercent: number;
-}): AbilityTarget {
+function upgradeTargetToAbilityTarget(target: UpgradeTargetValue): AbilityTarget {
   if (target.type === 'nearest-enemies' || target.type === 'random-enemies') {
     return { type: target.type, count: target.count };
   }
@@ -86,6 +83,10 @@ function addedTargetToAbilityTarget(target: {
     return { type: target.type, areaHeightPercent: target.areaHeightPercent };
   }
   return { type: target.type };
+}
+
+function addedTargetToAbilityTarget(target: UpgradeTargetValue): AbilityTarget {
+  return upgradeTargetToAbilityTarget(target);
 }
 
 function createAddedAbilityEffect(effect: UpgradeEffect): AbilityEffect | undefined {
@@ -133,6 +134,10 @@ function numericUpgradeValue(effect: UpgradeEffect, multiplier: number): number 
   return typeof effect.value === 'number' ? effect.value * multiplier : 0;
 }
 
+function assignTargetOverride(modifier: EffectRuntimeModifier, value: UpgradeTargetValue): void {
+  modifier.targetOverride = upgradeTargetToAbilityTarget(value);
+}
+
 export function addUpgradeEffectToModifiers(
   modifiers: AbilityRuntimeModifiers,
   effect: UpgradeEffect,
@@ -161,7 +166,7 @@ export function addUpgradeEffectToModifiers(
       activate(ability.damage).amountFlat += value;
       break;
     case 'ability-damage-target-type':
-      if (typeof effect.value === 'string') activate(ability.damage).targetType = effect.value as AbilityTargetType;
+      assignTargetOverride(activate(ability.damage), effect.value);
       break;
     case 'ability-damage-target-count':
       activate(ability.damage).targetCountBonus += value;
@@ -185,7 +190,7 @@ export function addUpgradeEffectToModifiers(
       activate(ability.periodicDamage).amountFlat += value;
       break;
     case 'ability-periodic-target-type':
-      if (typeof effect.value === 'string') activate(ability.periodicDamage).targetType = effect.value as AbilityTargetType;
+      assignTargetOverride(activate(ability.periodicDamage), effect.value);
       break;
     case 'ability-periodic-target-count':
       activate(ability.periodicDamage).targetCountBonus += value;
@@ -215,7 +220,7 @@ export function addUpgradeEffectToModifiers(
       activate(ability.slow).slowPercentBonus += value;
       break;
     case 'ability-slow-target-type':
-      if (typeof effect.value === 'string') activate(ability.slow).targetType = effect.value as AbilityTargetType;
+      assignTargetOverride(activate(ability.slow), effect.value);
       break;
     case 'ability-slow-target-count':
       activate(ability.slow).targetCountBonus += value;
@@ -267,7 +272,7 @@ function applyCriticalMultiplier(base: number, bonus: number): number {
 }
 
 function resolveTargetType(target: AbilityTarget, modifier: EffectRuntimeModifier): AbilityTargetType {
-  if (modifier.targetType) return modifier.targetType;
+  if (modifier.targetOverride) return modifier.targetOverride.type;
   if (modifier.areaHeightPercentBonus > 0) return 'area-enemies';
   if (modifier.targetCountBonus > 0 && target.type !== 'nearest-enemies' && target.type !== 'random-enemies') {
     return 'nearest-enemies';
@@ -276,10 +281,11 @@ function resolveTargetType(target: AbilityTarget, modifier: EffectRuntimeModifie
 }
 
 function applyTarget(target: AbilityTarget, modifier: EffectRuntimeModifier): AbilityTarget {
-  const type = resolveTargetType(target, modifier);
+  const configuredTarget = modifier.targetOverride ?? target;
+  const type = resolveTargetType(configuredTarget, modifier);
 
   if (type === 'nearest-enemies' || type === 'random-enemies') {
-    const baseCount = target.type === type ? (target.count ?? 1) : 1;
+    const baseCount = configuredTarget.type === type ? (configuredTarget.count ?? 1) : 1;
     return {
       type,
       count: Math.max(0, Math.floor(baseCount + modifier.targetCountBonus)),
@@ -287,8 +293,8 @@ function applyTarget(target: AbilityTarget, modifier: EffectRuntimeModifier): Ab
   }
 
   if (type === 'area-enemies') {
-    const baseHeight = target.type === 'area-enemies'
-      ? (target.areaHeightPercent ?? DEFAULT_AOE_HEIGHT_PERCENT)
+    const baseHeight = configuredTarget.type === 'area-enemies'
+      ? (configuredTarget.areaHeightPercent ?? DEFAULT_AOE_HEIGHT_PERCENT)
       : DEFAULT_AOE_HEIGHT_PERCENT;
     return {
       type,
@@ -299,18 +305,90 @@ function applyTarget(target: AbilityTarget, modifier: EffectRuntimeModifier): Ab
   return { type };
 }
 
+function createRuntimeEffectScaffold(
+  type: AbilityEffectType,
+  ability: AbilityDefinition,
+  modifier: EffectRuntimeModifier,
+): AbilityEffect {
+  const defaultEnemyTarget: AbilityTarget = type === 'slow'
+    ? { type: 'all-enemies' }
+    : { type: 'nearest-enemies', count: 1 };
+  const target = modifier.targetOverride ? { ...modifier.targetOverride } : defaultEnemyTarget;
+
+  if (type === 'damage') {
+    return {
+      type,
+      amount: 0,
+      damageSourceId: '',
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      target,
+    };
+  }
+
+  if (type === 'periodic-damage') {
+    return {
+      type,
+      chancePercent: 0,
+      amount: 0,
+      duration: 0,
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      visualColor: ability.color,
+      target,
+    };
+  }
+
+  if (type === 'slow') {
+    return {
+      type,
+      slowPercent: 0,
+      duration: 0,
+      target,
+    };
+  }
+
+  return {
+    type: 'heal',
+    amount: 0,
+    target: { type: 'castle' },
+  };
+}
+
+function appendMissingModifiedEffects(
+  effects: AbilityEffect[],
+  ability: AbilityDefinition,
+  modifier: AbilityRuntimeModifier,
+): AbilityEffect[] {
+  const next = [...effects];
+  const entries: Array<[AbilityEffectType, EffectRuntimeModifier]> = [
+    ['damage', modifier.damage],
+    ['periodic-damage', modifier.periodicDamage],
+    ['slow', modifier.slow],
+    ['heal', modifier.heal],
+  ];
+
+  for (const [type, effectModifier] of entries) {
+    if (effectModifier.active && !next.some((effect) => effect.type === type)) {
+      next.push(createRuntimeEffectScaffold(type, ability, effectModifier));
+    }
+  }
+
+  return next;
+}
+
 export function applyAbilityRuntimeModifier(
   ability: AbilityDefinition,
   modifier?: AbilityRuntimeModifier,
 ): AbilityDefinition {
   if (!modifier) return ability;
 
-  const sourceEffects = [
+  const sourceEffects = appendMissingModifiedEffects([
     ...ability.effects,
     ...modifier.addedEffects.map((effect) => ({ ...effect, target: { ...effect.target } } as AbilityEffect)),
-  ];
-  const effects = sourceEffects.map((effect) => {
+  ], ability, modifier);
 
+  const effects = sourceEffects.map((effect) => {
     if (effect.type === 'damage') {
       return {
         ...effect,

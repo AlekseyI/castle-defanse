@@ -276,6 +276,19 @@ export class BattleScene extends Container {
     useGameStore.getState().setWave(this.waveIndex + 1);
   }
 
+  refreshUpgradeChoices() {
+    const state = useGameStore.getState();
+    if (state.phase !== 'upgrade-selection' || state.upgradeChoices.length === 0) return;
+
+    const choices = generateUpgradeChoices(
+      this.upgradeCards,
+      state.upgradeCounts,
+      state.upgradeChoices.length,
+      state.upgradeMaxCardReceives,
+    );
+    if (choices.length > 0) state.openUpgradeSelection(choices);
+  }
+
   continueAfterUpgrade() {
     if (!this.pendingWaveAdvance || useGameStore.getState().phase !== 'playing') return;
     this.advanceToNextWave();

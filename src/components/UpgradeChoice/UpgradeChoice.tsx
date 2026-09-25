@@ -7,6 +7,8 @@ import styles from './UpgradeChoice.module.css';
 
 interface UpgradeChoiceProps {
   onSelect: (cardId: string) => void;
+  onRefresh: () => void;
+  onDismiss: () => void;
 }
 
 const TARGET_LABELS: Record<string, string> = {
@@ -26,6 +28,9 @@ function formatTarget(target: { type: string; count: number; areaHeightPercent: 
 
 function formatValue(effect: UpgradeEffect): string {
   if (typeof effect.value === 'object') {
+    if (!('target' in effect.value)) {
+      return formatTarget(effect.value);
+    }
     if (effect.type === 'ability-add-damage') {
       return `урон ${effect.value.amount}; источник ${effect.value.damageSourceId || '—'}; крит ${effect.value.criticalChancePercent}% ×${effect.value.criticalMultiplier}; ${formatTarget(effect.value.target)}`;
     }
@@ -39,7 +44,6 @@ function formatValue(effect: UpgradeEffect): string {
   }
 
   if (typeof effect.value === 'string') {
-    if (effect.type.endsWith('-target-type')) return TARGET_LABELS[effect.value] ?? effect.value;
     return effect.value;
   }
 
@@ -50,14 +54,14 @@ function formatValue(effect: UpgradeEffect): string {
     effect.type === 'ability-slow-percent' ||
     effect.type.endsWith('-area-height')
   ) {
-    return `${prefix}${effect.value} процентных пунктов`;
+    return `${prefix}${effect.value}%`;
   }
   if (effect.type.endsWith('-percent')) return `${prefix}${effect.value}%`;
   if (effect.type.endsWith('-duration-flat')) return `${prefix}${effect.value} сек.`;
   return `${prefix}${effect.value}`;
 }
 
-export function UpgradeChoice({ onSelect }: UpgradeChoiceProps) {
+export function UpgradeChoice({ onSelect, onRefresh, onDismiss }: UpgradeChoiceProps) {
   const choices = useGameStore((state) => state.upgradeChoices);
   const counts = useGameStore((state) => state.upgradeCounts);
   const maxCardReceives = useGameStore((state) => state.upgradeMaxCardReceives);
@@ -73,6 +77,29 @@ export function UpgradeChoice({ onSelect }: UpgradeChoiceProps) {
         <header className={styles.header}>
           <span>Награда за волну</span>
           <h2>Выберите улучшение</h2>
+          <div className={styles.headerActions}>
+            <button
+              className={styles.dismissButton}
+              type="button"
+              onClick={onDismiss}
+            >
+              Отказаться
+            </button>
+            <button
+              className={styles.refreshButton}
+              type="button"
+              aria-label="Обновить карточки"
+              title="Обновить карточки"
+              onClick={onRefresh}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 6v5h-5" />
+                <path d="M4 18v-5h5" />
+                <path d="M6.1 9A7 7 0 0 1 18.7 6.7L20 11" />
+                <path d="M17.9 15A7 7 0 0 1 5.3 17.3L4 13" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         <div className={styles.cards}>

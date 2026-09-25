@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { EditorColorInput, EditorFileInput, EditorInput, EditorTextarea } from '../../components/EditorControls';
 import {
   deleteDamageSource,
   normalizeDamageSource,
@@ -206,7 +207,7 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
               <div className={styles.headerActions}>
                 <label className={styles.fileButton}>
                   Загрузить картинку
-                  <input type="file" accept="image/*,.svg" onChange={handleImageUpload} />
+                  <EditorFileInput accept="image/*,.svg" onChange={handleImageUpload} />
                 </label>
                 <button
                   className={styles.toolbarButton}
@@ -229,7 +230,7 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span>ID</span>
-                  <input
+                  <EditorInput
                     value={draft.id}
                     aria-invalid={Boolean(validation.errors.id)}
                     onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
@@ -242,7 +243,7 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
 
                 <label className={styles.field}>
                   <span>Название</span>
-                  <input
+                  <EditorInput
                     value={draft.name}
                     aria-invalid={Boolean(validation.errors.name)}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -254,13 +255,11 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
                 <label className={styles.field}>
                   <span>Цвет</span>
                   <div className={styles.colorRow}>
-                    <input
-                      className={styles.colorPicker}
-                      type="color"
+                    <EditorColorInput
                       value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color : '#ffffff'}
                       onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
                     />
-                    <input
+                    <EditorInput
                       value={draft.color ?? ''}
                       aria-invalid={Boolean(validation.errors.color)}
                       onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
@@ -273,7 +272,7 @@ export function DamageSourcesEditor({ onBackToMain, onBackToEditors }: DamageSou
 
                 <label className={`${styles.field} ${styles.fullRow}`}>
                   <span>Описание</span>
-                  <textarea
+                  <EditorTextarea
                     value={draft.description ?? ''}
                     onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
                     placeholder="Короткое описание источника"

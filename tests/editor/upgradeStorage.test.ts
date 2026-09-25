@@ -49,7 +49,7 @@ describe('upgradeStorage', () => {
             visualColor: '#000000',
             target: {
               type: 'nearest-enemies',
-              count: 0,
+              count: 1,
               areaHeightPercent: 0,
             },
           },
@@ -82,7 +82,7 @@ describe('upgradeStorage', () => {
     const current: UpgradeCardDefinition = {
       ...card,
       effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: 'area-enemies' },
+        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 45 } },
         { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
         { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
       ],
@@ -92,11 +92,18 @@ describe('upgradeStorage', () => {
     expect(loadUpgrades()).toEqual([current]);
   });
 
-  it('rejects the old card json format with maxCount instead of migrating it', () => {
+  it('does not load the previous storage version', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.upgrades.v2', JSON.stringify([{
+    window.localStorage.setItem('game.upgrades.v2', JSON.stringify([card]));
+
+    expect(loadUpgrades()).toEqual(DEFAULT_UPGRADES);
+  });
+
+  it('rejects the previous target json shape instead of migrating it', () => {
+    installLocalStorage();
+    window.localStorage.setItem('game.upgrades.v3', JSON.stringify([{
       ...card,
-      maxCount: 5,
+      effects: [{ type: 'ability-damage-target-type', abilityId: 'fire', value: 'area-enemies' }],
     }]));
 
     expect(loadUpgrades()).toEqual(DEFAULT_UPGRADES);

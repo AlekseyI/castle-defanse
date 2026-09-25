@@ -187,6 +187,27 @@ describe('gameStore upgrades', () => {
     }]);
   });
 
+  it('dismisses upgrade selection without applying or counting a card', () => {
+    const card = {
+      id: 'skip_me',
+      name: 'Пропустить',
+      description: '',
+      rarity: 'common' as const,
+      weight: 100,
+      effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
+    };
+
+    useGameStore.getState().openUpgradeSelection([card]);
+    expect(useGameStore.getState().dismissUpgradeSelection()).toBe(true);
+
+    const state = useGameStore.getState();
+    expect(state.phase).toBe('playing');
+    expect(state.upgradeChoices).toEqual([]);
+    expect(state.upgradeCounts).toEqual({});
+    expect(state.abilityModifiers).toEqual({});
+    expect(useGameStore.getState().dismissUpgradeSelection()).toBe(false);
+  });
+
   it('does not allow selecting a card outside the current choices or beyond the map receive limit', () => {
     useGameStore.getState().reset(3, ['fire'], 1);
     const card = {

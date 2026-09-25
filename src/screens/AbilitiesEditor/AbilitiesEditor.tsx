@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { EditorCheckbox, EditorColorInput, EditorFileInput, EditorInput, EditorSelect, EditorTextarea } from '../../components/EditorControls';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import {
   changeAbilityEffectTypes,
@@ -206,7 +207,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
       <>
         <label className={styles.field}>
           <span>Тип цели</span>
-          <select
+          <EditorSelect
             value={effect.target.type}
             aria-invalid={Boolean(targetError)}
             onChange={(event) => setDraft((current) => changeAbilityEffectTarget(
@@ -218,14 +219,14 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
             {getAllowedTargets(effect.type).map((target) => (
               <option key={target} value={target}>{TARGET_LABELS[target]}</option>
             ))}
-          </select>
+          </EditorSelect>
           {targetError && <small className={styles.fieldError}>{targetError}</small>}
         </label>
 
         {(effect.target.type === 'nearest-enemies' || effect.target.type === 'random-enemies') && (
           <label className={styles.field}>
             <span>Количество целей</span>
-            <input
+            <EditorInput
               type="number"
               min="1"
               step="1"
@@ -248,7 +249,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
         {effect.target.type === 'area-enemies' && (
           <label className={styles.field}>
             <span>Высота области, %</span>
-            <input
+            <EditorInput
               type="number"
               min="1"
               max="100"
@@ -338,7 +339,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
               <div className={styles.headerActions}>
                 <label className={styles.fileButton}>
                   Загрузить картинку
-                  <input type="file" accept="image/*,.svg" onChange={handleImageUpload} />
+                  <EditorFileInput accept="image/*,.svg" onChange={handleImageUpload} />
                 </label>
                 <button
                   className={styles.toolbarButton}
@@ -361,7 +362,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span>ID</span>
-                  <input
+                  <EditorInput
                     value={draft.id}
                     aria-invalid={Boolean(validation.errors.id)}
                     onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
@@ -374,7 +375,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                 <label className={styles.field}>
                   <span>Название</span>
-                  <input
+                  <EditorInput
                     value={draft.name}
                     aria-invalid={Boolean(validation.errors.name)}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -386,13 +387,11 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                 <label className={styles.field}>
                   <span>Цвет</span>
                   <div className={styles.colorRow}>
-                    <input
-                      className={styles.colorPicker}
-                      type="color"
+                    <EditorColorInput
                       value={previewColor}
                       onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
                     />
-                    <input
+                    <EditorInput
                       value={draft.color}
                       aria-invalid={Boolean(validation.errors.color)}
                       onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
@@ -412,8 +411,8 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                         const checked = draft.effects.some((effect) => effect.type === type);
                         return (
                           <label key={type} className={styles.multiSelectOption}>
-                            <input
-                              type="checkbox"
+                            <EditorCheckbox
+                              className={styles.multiSelectCheckbox}
                               checked={checked}
                               onChange={(event) => setDraft((current) => {
                                 const selectedTypes = getEffectTypes(current);
@@ -434,7 +433,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                 <label className={styles.field}>
                   <span>Визуальный эффект</span>
-                  <select
+                  <EditorSelect
                     value={draft.visualEffect}
                     aria-invalid={Boolean(validation.errors.visualEffect)}
                     onChange={(event) => setDraft((current) => ({
@@ -447,7 +446,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                         {VISUAL_EFFECT_LABELS[visualEffect]}
                       </option>
                     ))}
-                  </select>
+                  </EditorSelect>
                   {validation.errors.visualEffect && (
                     <small className={styles.fieldError}>{validation.errors.visualEffect}</small>
                   )}
@@ -455,7 +454,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                 <label className={`${styles.field} ${styles.fullRow}`}>
                   <span>Описание</span>
-                  <textarea
+                  <EditorTextarea
                     value={draft.description ?? ''}
                     onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
                     placeholder="Что делает способность"
@@ -477,7 +476,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                           {renderTargetFields(effect)}
                           <label className={styles.field}>
                             <span>Урон</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               value={effect.amount}
@@ -494,7 +493,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Источник урона</span>
-                            <select
+                            <EditorSelect
                               value={effect.damageSourceId}
                               aria-invalid={Boolean(validation.errors.damageSourceId)}
                               onChange={(event) => setDraft((current) => ({
@@ -505,13 +504,13 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                               }))}
                             >
                               {damageSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-                            </select>
+                            </EditorSelect>
                             {validation.errors.damageSourceId && <small className={styles.fieldError}>{validation.errors.damageSourceId}</small>}
                           </label>
 
                           <label className={styles.field}>
                             <span>Шанс крит. урона, %</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               max="100"
@@ -532,7 +531,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Множитель крит. урона</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="1"
                               step="0.1"
@@ -563,7 +562,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                           {renderTargetFields(effect)}
                           <label className={styles.field}>
                             <span>Шанс, %</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               max="100"
@@ -583,7 +582,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Урон</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               value={effect.amount}
@@ -602,7 +601,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Длительность, сек.</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0.1"
                               step="0.1"
@@ -623,7 +622,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Шанс крит. урона, %</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               max="100"
@@ -643,7 +642,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Множитель крит. урона</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="1"
                               step="0.1"
@@ -664,9 +663,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                           <label className={styles.field}>
                             <span>Цвет визуального эффекта</span>
                             <div className={styles.colorRow}>
-                              <input
-                                className={styles.colorPicker}
-                                type="color"
+                              <EditorColorInput
                                 value={/^#[0-9a-fA-F]{6}$/.test(effect.visualColor) ? effect.visualColor : '#64748b'}
                                 onChange={(event) => setDraft((current) => ({
                                   ...current,
@@ -675,7 +672,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                                     : item),
                                 }))}
                               />
-                              <input
+                              <EditorInput
                                 value={effect.visualColor}
                                 aria-invalid={Boolean(validation.errors.periodicDamageVisualColor)}
                                 onChange={(event) => setDraft((current) => ({
@@ -706,7 +703,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                           {renderTargetFields(effect)}
                           <label className={styles.field}>
                             <span>Замедление, %</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               max="100"
@@ -724,7 +721,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
 
                           <label className={styles.field}>
                             <span>Длительность, сек.</span>
-                            <input
+                            <EditorInput
                               type="number"
                               min="0"
                               step="0.1"
@@ -752,7 +749,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                         {renderTargetFields(effect)}
                         <label className={styles.field}>
                           <span>Лечение, HP</span>
-                          <input
+                          <EditorInput
                             type="number"
                             min="0"
                             value={effect.amount}

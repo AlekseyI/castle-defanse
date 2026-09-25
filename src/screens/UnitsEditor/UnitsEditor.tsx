@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { EditorCheckbox, EditorFileInput, EditorInput } from '../../components/EditorControls';
 import { deleteUnit, normalizeUnit, saveUnit, validateUnit } from '../../editor/units/unitLogic';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits, persistUnits } from '../../editor/units/unitStorage';
@@ -229,7 +230,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
               <div className={styles.headerActions}>
                 <label className={styles.fileButton}>
                   Загрузить картинку
-                  <input type="file" accept="image/*,.svg" onChange={handleImageUpload} />
+                  <EditorFileInput accept="image/*,.svg" onChange={handleImageUpload} />
                 </label>
                 <button
                   className={styles.toolbarButton}
@@ -258,7 +259,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span>ID</span>
-                  <input
+                  <EditorInput
                     value={draft.id}
                     aria-invalid={Boolean(validation.errors.id)}
                     onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
@@ -271,7 +272,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
 
                 <label className={styles.field}>
                   <span>Название</span>
-                  <input
+                  <EditorInput
                     value={draft.name}
                     aria-invalid={Boolean(validation.errors.name)}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -282,7 +283,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
 
                 <label className={styles.field}>
                   <span>HP</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="1"
                     step="1"
@@ -295,7 +296,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
 
                 <label className={styles.field}>
                   <span>Скорость</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -308,7 +309,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
 
                 <label className={styles.field}>
                   <span>Урон</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -321,7 +322,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
 
                 <label className={styles.field}>
                   <span>Монеты за смерть</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -333,8 +334,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                 </label>
 
                 <label className={styles.checkboxField}>
-                  <input
-                    type="checkbox"
+                  <EditorCheckbox
                     checked={draft.isBoss}
                     onChange={(event) => setDraft((current) => ({ ...current, isBoss: event.target.checked }))}
                   />
@@ -350,7 +350,7 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                 {damageSources.map((source) => (
                   <label className={styles.field} key={source.id}>
                     <span>{source.name}, %</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="-100"
                       max="100"

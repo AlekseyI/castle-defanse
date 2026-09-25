@@ -31,6 +31,11 @@ export type UpgradeModifierEffectType =
   | 'ability-heal-percent'
   | 'ability-heal-flat';
 
+export type UpgradeTargetEffectType =
+  | 'ability-damage-target-type'
+  | 'ability-periodic-target-type'
+  | 'ability-slow-target-type';
+
 export type UpgradeAddEffectType =
   | 'ability-add-damage'
   | 'ability-add-periodic-damage'
@@ -39,11 +44,13 @@ export type UpgradeAddEffectType =
 
 export type UpgradeEffectType = UpgradeModifierEffectType | UpgradeAddEffectType;
 
-export interface UpgradeAddedTarget {
+export interface UpgradeTargetValue {
   type: AbilityTargetType;
   count: number;
   areaHeightPercent: number;
 }
+
+export type UpgradeAddedTarget = UpgradeTargetValue;
 
 export interface UpgradeAddedDamageValue {
   amount: number;
@@ -80,14 +87,17 @@ export type UpgradeAddEffectValue =
   | UpgradeAddedSlowValue
   | UpgradeAddedHealValue;
 
-export type UpgradeEffectValue = number | string | UpgradeAddEffectValue;
+export type UpgradeEffectValue = number | string | UpgradeTargetValue | UpgradeAddEffectValue;
 
 interface UpgradeEffectBase {
   abilityId: string;
 }
 
+type UpgradeNonTargetModifierEffectType = Exclude<UpgradeModifierEffectType, UpgradeTargetEffectType>;
+
 export type UpgradeEffect =
-  | (UpgradeEffectBase & { type: UpgradeModifierEffectType; value: number | string })
+  | (UpgradeEffectBase & { type: UpgradeNonTargetModifierEffectType; value: number | string })
+  | (UpgradeEffectBase & { type: UpgradeTargetEffectType; value: UpgradeTargetValue })
   | (UpgradeEffectBase & { type: 'ability-add-damage'; value: UpgradeAddedDamageValue })
   | (UpgradeEffectBase & { type: 'ability-add-periodic-damage'; value: UpgradeAddedPeriodicDamageValue })
   | (UpgradeEffectBase & { type: 'ability-add-slow'; value: UpgradeAddedSlowValue })

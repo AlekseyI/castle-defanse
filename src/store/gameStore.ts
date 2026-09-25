@@ -35,6 +35,7 @@ interface GameState {
   setAutoCastMatches: (enabled: boolean) => void;
   setBoardBusy: (busy: boolean) => void;
   openUpgradeSelection: (choices: UpgradeCardDefinition[]) => void;
+  dismissUpgradeSelection: () => boolean;
   selectUpgrade: (cardId: string) => boolean;
   reset: (totalWaves: number, abilityIds?: TileKind[], maxCardReceives?: number) => void;
 }
@@ -111,6 +112,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
   openUpgradeSelection: (choices) => {
     if (choices.length === 0) return;
     set({ upgradeChoices: choices, phase: 'upgrade-selection' });
+  },
+
+  dismissUpgradeSelection: () => {
+    if (get().phase !== 'upgrade-selection') return false;
+    set({ upgradeChoices: [], phase: 'playing' });
+    return true;
   },
 
   selectUpgrade: (cardId) => {

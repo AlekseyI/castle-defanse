@@ -79,6 +79,10 @@ export class Game {
     this.scene?.continueAfterUpgrade();
   }
 
+  refreshUpgradeChoices() {
+    this.scene?.refreshUpgradeChoices();
+  }
+
   private readonly scheduleResize = () => {
     if (this.disposed || !this.initialized) return;
     if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);

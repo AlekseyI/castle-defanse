@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { EditorColorInput, EditorFileInput, EditorInput, EditorSelect, EditorTextarea } from '../../components/EditorControls';
 import { getAllowedTargets } from '../../editor/abilities/abilityLogic';
 import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import type { AbilityTargetType } from '../../editor/abilities/types';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import {
   changeAddedTargetType,
+  changeUpgradeTargetType,
   cloneUpgradeCard,
   createEmptyUpgradeCard,
   createEmptyUpgradeEffect,
@@ -25,6 +27,7 @@ import type {
   UpgradeEffectType,
   UpgradeEffectValue,
   UpgradeRarity,
+  UpgradeTargetValue,
 } from '../../editor/upgrades/types';
 import styles from './UpgradesEditor.module.css';
 
@@ -48,6 +51,44 @@ const TARGET_LABELS: Record<AbilityTargetType, string> = {
   castle: 'Замок',
 };
 
+const PARAMETER_GROUPS: Array<{
+  label: string;
+  match: (type: UpgradeEffectType) => boolean;
+}> = [
+  {
+    label: 'Основной урон',
+    match: (type) => {
+      const option = getUpgradeEffectOption(type);
+      return option?.valueKind !== 'add-effect' && option?.abilityEffectType === 'damage';
+    },
+  },
+  {
+    label: 'Периодический урон',
+    match: (type) => {
+      const option = getUpgradeEffectOption(type);
+      return option?.valueKind !== 'add-effect' && option?.abilityEffectType === 'periodic-damage';
+    },
+  },
+  {
+    label: 'Замедление',
+    match: (type) => {
+      const option = getUpgradeEffectOption(type);
+      return option?.valueKind !== 'add-effect' && option?.abilityEffectType === 'slow';
+    },
+  },
+  {
+    label: 'Лечение',
+    match: (type) => {
+      const option = getUpgradeEffectOption(type);
+      return option?.valueKind !== 'add-effect' && option?.abilityEffectType === 'heal';
+    },
+  },
+  {
+    label: 'Добавление',
+    match: (type) => getUpgradeEffectOption(type)?.valueKind === 'add-effect',
+  },
+];
+
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -68,6 +109,59 @@ function numberValue(value: string): number {
 function zeroNumberValue(value: string): number {
   const parsed = value.trim() === '' ? 0 : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function applyDefaultDamageSource(
+  type: UpgradeEffectType,
+  value: UpgradeEffectValue,
+  defaultDamageSourceId?: string,
+): UpgradeEffectValue {
+  if (!defaultDamageSourceId) return value;
+
+  if (type === 'ability-damage-source') {
+    return typeof value === 'string' && value ? value : defaultDamageSourceId;
+  }
+
+  if (type === 'ability-add-damage' && typeof value === 'object' && value && 'damageSourceId' in value) {
+    return {
+      ...value,
+      damageSourceId: value.damageSourceId || defaultDamageSourceId,
+    } as UpgradeAddEffectValue;
+  }
+
+  return value;
+}
+
+function prepareUpgradeCardForEditing(
+  card: UpgradeCardDefinition,
+  defaultDamageSourceId?: string,
+): UpgradeCardDefinition {
+  const prepared = cloneUpgradeCard(card);
+  return {
+    ...prepared,
+    effects: prepared.effects.map((effect) => ({
+      ...effect,
+      value: applyDefaultDamageSource(effect.type, effect.value, defaultDamageSourceId),
+    } as UpgradeEffect)),
+  };
+}
+
+function createEditorUpgradeEffect(
+  abilities: ReturnType<typeof loadAbilities>,
+  defaultDamageSourceId?: string,
+): UpgradeEffect {
+  const effect = createEmptyUpgradeEffect(abilities);
+  return {
+    ...effect,
+    value: applyDefaultDamageSource(effect.type, effect.value, defaultDamageSourceId),
+  } as UpgradeEffect;
+}
+
+function createEditorUpgradeCard(
+  abilities: ReturnType<typeof loadAbilities>,
+  defaultDamageSourceId?: string,
+): UpgradeCardDefinition {
+  return prepareUpgradeCardForEditing(createEmptyUpgradeCard(abilities), defaultDamageSourceId);
 }
 
 type SignedNumberInputProps = {
@@ -104,7 +198,7 @@ function SignedNumberInput({ value, invalid, onCommit }: SignedNumberInputProps)
   };
 
   return (
-    <input
+    <EditorInput
       type="text"
       inputMode="text"
       value={text}
@@ -127,9 +221,14 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   const [abilities] = useState(() => loadAbilities());
   const [damageSources] = useState(() => loadDamageSources());
   const [cards, setCards] = useState<UpgradeCardDefinition[]>(() => loadUpgrades());
+  const defaultDamageSourceId = damageSources[0]?.id;
   const [selectedId, setSelectedId] = useState<string | null>(() => cards[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | undefined>(() => cards[0]?.id);
-  const [draft, setDraft] = useState<UpgradeCardDefinition>(() => cloneUpgradeCard(cards[0] ?? createEmptyUpgradeCard(abilities)));
+  const [draft, setDraft] = useState<UpgradeCardDefinition>(() => (
+    cards[0]
+      ? prepareUpgradeCardForEditing(cards[0], defaultDamageSourceId)
+      : createEditorUpgradeCard(abilities, defaultDamageSourceId)
+  ));
   const [isCreating, setIsCreating] = useState(cards.length === 0);
   const sortedCards = useMemo(
     () => [...cards].sort((a, b) => a.name.localeCompare(b.name, 'ru') || a.id.localeCompare(b.id)),
@@ -163,14 +262,14 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   const selectCard = (card: UpgradeCardDefinition) => {
     setSelectedId(card.id);
     setEditingId(card.id);
-    setDraft(cloneUpgradeCard(card));
+    setDraft(prepareUpgradeCardForEditing(card, defaultDamageSourceId));
     setIsCreating(false);
   };
 
   const openCreate = () => {
     setSelectedId(null);
     setEditingId(undefined);
-    setDraft(createEmptyUpgradeCard(abilities));
+    setDraft(createEditorUpgradeCard(abilities, defaultDamageSourceId));
     setIsCreating(true);
   };
 
@@ -183,7 +282,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const next = remaining[0] ?? null;
     setSelectedId(next?.id ?? null);
     setEditingId(next?.id);
-    setDraft(cloneUpgradeCard(next ?? createEmptyUpgradeCard(abilities)));
+    setDraft(next
+      ? prepareUpgradeCardForEditing(next, defaultDamageSourceId)
+      : createEditorUpgradeCard(abilities, defaultDamageSourceId));
     setIsCreating(next === null);
   };
 
@@ -214,6 +315,14 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     } as UpgradeAddEffectValue);
   };
 
+  const updateTargetValue = (
+    index: number,
+    value: UpgradeTargetValue,
+    patch: Partial<UpgradeTargetValue>,
+  ) => {
+    updateEffect(index, { value: { ...value, ...patch } });
+  };
+
   const handleAbilityChange = (index: number, abilityId: string) => {
     const ability = abilities.find((item) => item.id === abilityId);
     const compatible = getCompatibleUpgradeEffectTypes(ability);
@@ -221,14 +330,16 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const nextType = compatible.includes(currentEffect?.type)
       ? currentEffect.type
       : (compatible[0] ?? 'ability-damage-percent');
-    const option = getUpgradeEffectOption(nextType);
-
     updateEffect(index, {
       abilityId,
       type: nextType,
-      value: option?.valueKind === 'number' && currentEffect?.type === nextType && typeof currentEffect.value === 'number'
+      value: currentEffect?.type === nextType
         ? currentEffect.value
-        : getDefaultUpgradeEffectValue(nextType, ability),
+        : applyDefaultDamageSource(
+          nextType,
+          getDefaultUpgradeEffectValue(nextType, ability),
+          defaultDamageSourceId,
+        ),
     });
   };
 
@@ -236,7 +347,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const ability = abilities.find((item) => item.id === draft.effects[index]?.abilityId);
     updateEffect(index, {
       type,
-      value: getDefaultUpgradeEffectValue(type, ability),
+      value: applyDefaultDamageSource(
+        type,
+        getDefaultUpgradeEffectValue(type, ability),
+        defaultDamageSourceId,
+      ),
     });
   };
 
@@ -248,22 +363,22 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     <>
       <label className={styles.field}>
         <span>Тип цели</span>
-        <select
+        <EditorSelect
           value={value.target.type}
           onChange={(event) => updateAddedValue(index, changeAddedTargetType(value, event.target.value as AbilityTargetType))}
         >
           {getAllowedTargets(effectType).map((target) => (
             <option key={target} value={target}>{TARGET_LABELS[target]}</option>
           ))}
-        </select>
+        </EditorSelect>
       </label>
 
       {(value.target.type === 'nearest-enemies' || value.target.type === 'random-enemies') && (
         <label className={styles.field}>
           <span>Количество целей</span>
-          <input
+          <EditorInput
             type="number"
-            min="0"
+            min="1"
             step="1"
             value={value.target.count}
             onChange={(event) => updateAddedTarget(index, value, { count: zeroNumberValue(event.target.value) })}
@@ -274,9 +389,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       {value.target.type === 'area-enemies' && (
         <label className={styles.field}>
           <span>Высота области, %</span>
-          <input
+          <EditorInput
             type="number"
-            min="0"
+            min="1"
             max="100"
             step="1"
             value={value.target.areaHeightPercent}
@@ -295,22 +410,21 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           {renderAddedTargetFields(index, value, 'damage')}
           <label className={styles.field}>
             <span>Урон</span>
-            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Источник урона</span>
-            <select value={value.damageSourceId} onChange={(event) => updateAddedValue(index, { ...value, damageSourceId: event.target.value })}>
-              <option value="">—</option>
+            <EditorSelect value={value.damageSourceId} onChange={(event) => updateAddedValue(index, { ...value, damageSourceId: event.target.value })}>
               {damageSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-            </select>
+            </EditorSelect>
           </label>
           <label className={styles.field}>
             <span>Шанс крит. урона, %</span>
-            <input type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Множитель крит. урона</span>
-            <input type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
           </label>
         </>
       );
@@ -324,29 +438,29 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           {renderAddedTargetFields(index, value, 'periodic-damage')}
           <label className={styles.field}>
             <span>Шанс, %</span>
-            <input type="number" min="0" max="100" step="0.1" value={value.chancePercent} onChange={(event) => updateAddedValue(index, { ...value, chancePercent: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" max="100" step="0.1" value={value.chancePercent} onChange={(event) => updateAddedValue(index, { ...value, chancePercent: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Урон</span>
-            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Длительность, сек.</span>
-            <input type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Шанс крит. урона, %</span>
-            <input type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Множитель крит. урона</span>
-            <input type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Цвет визуального эффекта</span>
             <div className={styles.colorRow}>
-              <input className={styles.colorPicker} type="color" value={pickerColor} onChange={(event) => updateAddedValue(index, { ...value, visualColor: event.target.value })} />
-              <input
+              <EditorColorInput value={pickerColor} onChange={(event) => updateAddedValue(index, { ...value, visualColor: event.target.value })} />
+              <EditorInput
                 value={value.visualColor}
                 aria-invalid={Boolean(validation.errors[`effect.${index}.visualColor`])}
                 placeholder="#000000"
@@ -369,11 +483,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           {renderAddedTargetFields(index, value, 'slow')}
           <label className={styles.field}>
             <span>Замедление, %</span>
-            <input type="number" min="0" max="100" step="0.1" value={value.slowPercent} onChange={(event) => updateAddedValue(index, { ...value, slowPercent: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" max="100" step="0.1" value={value.slowPercent} onChange={(event) => updateAddedValue(index, { ...value, slowPercent: zeroNumberValue(event.target.value) })} />
           </label>
           <label className={styles.field}>
             <span>Длительность, сек.</span>
-            <input type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
           </label>
         </>
       );
@@ -386,7 +500,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           {renderAddedTargetFields(index, value, 'heal')}
           <label className={styles.field}>
             <span>Лечение</span>
-            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+            <EditorInput type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
           </label>
         </>
       );
@@ -461,7 +575,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <div className={styles.headerActions}>
               <label className={styles.fileButton}>
                 Загрузить картинку
-                <input type="file" accept="image/*,.svg" onChange={handleImageUpload} />
+                <EditorFileInput mode="overlay" accept="image/*,.svg" onChange={handleImageUpload} />
               </label>
               <button
                 className={styles.toolbarButton}
@@ -480,7 +594,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <div className={styles.formGrid}>
               <label className={styles.field}>
                 <span>ID</span>
-                <input
+                <EditorInput
                   value={draft.id}
                   aria-invalid={Boolean(validation.errors.id)}
                   onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
@@ -490,7 +604,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
 
               <label className={styles.field}>
                 <span>Название</span>
-                <input
+                <EditorInput
                   value={draft.name}
                   aria-invalid={Boolean(validation.errors.name)}
                   onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -500,19 +614,19 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
 
               <label className={styles.field}>
                 <span>Редкость</span>
-                <select
+                <EditorSelect
                   value={draft.rarity}
                   aria-invalid={Boolean(validation.errors.rarity)}
                   onChange={(event) => setDraft((current) => ({ ...current, rarity: event.target.value as UpgradeRarity }))}
                 >
                   {Object.entries(RARITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                </EditorSelect>
                 {validation.errors.rarity && <small className={styles.fieldError}>{validation.errors.rarity}</small>}
               </label>
 
               <label className={styles.field}>
                 <span>Вес выпадения</span>
-                <input
+                <EditorInput
                   type="number"
                   min="0.01"
                   step="1"
@@ -526,13 +640,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
               <label className={styles.field}>
                 <span>Цвет</span>
                 <div className={styles.colorRow}>
-                  <input
-                    className={styles.colorPicker}
-                    type="color"
+                  <EditorColorInput
                     value={previewColor}
                     onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
                   />
-                  <input
+                  <EditorInput
                     value={draft.color ?? ''}
                     aria-invalid={Boolean(validation.errors.color)}
                     placeholder="#64748b"
@@ -545,7 +657,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
 
               <label className={`${styles.field} ${styles.fullRow}`}>
                 <span>Описание</span>
-                <textarea
+                <EditorTextarea
                   rows={3}
                   value={draft.description}
                   onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
@@ -558,14 +670,14 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <div className={styles.effectsHeader}>
               <div>
                 <h2>Эффекты</h2>
-                <p>Для существующего эффекта доступны его параметры улучшения. Если эффекта у способности нет, выберите «Добавить …» и задайте параметры нового эффекта явно.</p>
+                <p>Любой параметр доступен для любой способности: он может улучшить существующий эффект или создать отсутствующий. Для смены типа цели сразу задаются параметры новой цели.</p>
               </div>
               <button
                 className={styles.primaryButton}
                 type="button"
                 onClick={() => setDraft((current) => ({
                   ...current,
-                  effects: [...current.effects, createEmptyUpgradeEffect(abilities)],
+                  effects: [...current.effects, createEditorUpgradeEffect(abilities, defaultDamageSourceId)],
                 }))}
               >
                 + Добавить эффект
@@ -582,26 +694,36 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                   <div className={styles.effectCard} key={`${effect.abilityId}:${effect.type}:${index}`}>
                     <label className={styles.field}>
                       <span>Способность</span>
-                      <select
+                      <EditorSelect
                         value={effect.abilityId}
                         aria-invalid={Boolean(validation.errors[`effect.${index}.abilityId`])}
                         onChange={(event) => handleAbilityChange(index, event.target.value)}
                       >
-                        <option value="">—</option>
                         {abilities.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
+                      </EditorSelect>
                       {validation.errors[`effect.${index}.abilityId`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.abilityId`]}</small>}
                     </label>
 
                     <label className={styles.field}>
                       <span>Параметр</span>
-                      <select
+                      <EditorSelect
                         value={effect.type}
                         aria-invalid={Boolean(validation.errors[`effect.${index}.type`])}
                         onChange={(event) => handleEffectTypeChange(index, event.target.value as UpgradeEffectType)}
                       >
-                        {compatible.map((type) => <option key={type} value={type}>{getUpgradeEffectOption(type)?.label}</option>)}
-                      </select>
+                        {PARAMETER_GROUPS.map((group) => {
+                          const types = compatible.filter(group.match);
+                          if (types.length === 0) return null;
+
+                          return (
+                            <optgroup key={group.label} label={group.label}>
+                              {types.map((type) => (
+                                <option key={type} value={type}>{getUpgradeEffectOption(type)?.label}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                      </EditorSelect>
                       {validation.errors[`effect.${index}.type`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.type`]}</small>}
                     </label>
 
@@ -622,31 +744,70 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                           const valueError = Boolean(validation.errors[`effect.${index}.value`]);
 
                           if (option?.valueKind === 'target-type') {
+                            const targetValue = typeof effect.value === 'object' && effect.value && !('target' in effect.value)
+                              ? effect.value as UpgradeTargetValue
+                              : getDefaultUpgradeEffectValue(effect.type, ability) as UpgradeTargetValue;
+
                             return (
-                              <select
-                                value={typeof effect.value === 'string' ? effect.value : ''}
-                                aria-invalid={valueError}
-                                onChange={(event) => updateEffect(index, { value: event.target.value })}
-                              >
-                                {getAllowedTargets(option.abilityEffectType).map((target) => (
-                                  <option key={target} value={target}>{TARGET_LABELS[target]}</option>
-                                ))}
-                              </select>
+                              <div className={styles.formGrid}>
+                                <label className={styles.field}>
+                                  <span>Тип цели</span>
+                                  <EditorSelect
+                                    value={targetValue.type}
+                                    aria-invalid={valueError}
+                                    onChange={(event) => updateEffect(index, {
+                                      value: changeUpgradeTargetType(targetValue, event.target.value as AbilityTargetType),
+                                    })}
+                                  >
+                                    {getAllowedTargets(option.abilityEffectType).map((target) => (
+                                      <option key={target} value={target}>{TARGET_LABELS[target]}</option>
+                                    ))}
+                                  </EditorSelect>
+                                </label>
+
+                                {(targetValue.type === 'nearest-enemies' || targetValue.type === 'random-enemies') && (
+                                  <label className={styles.field}>
+                                    <span>Количество целей</span>
+                                    <EditorInput
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={targetValue.count}
+                                      aria-invalid={valueError}
+                                      onChange={(event) => updateTargetValue(index, targetValue, { count: zeroNumberValue(event.target.value) })}
+                                    />
+                                  </label>
+                                )}
+
+                                {targetValue.type === 'area-enemies' && (
+                                  <label className={styles.field}>
+                                    <span>Высота области, %</span>
+                                    <EditorInput
+                                      type="number"
+                                      min="1"
+                                      max="100"
+                                      step="1"
+                                      value={targetValue.areaHeightPercent}
+                                      aria-invalid={valueError}
+                                      onChange={(event) => updateTargetValue(index, targetValue, { areaHeightPercent: zeroNumberValue(event.target.value) })}
+                                    />
+                                  </label>
+                                )}
+                              </div>
                             );
                           }
 
                           if (option?.valueKind === 'damage-source') {
                             return (
-                              <select
+                              <EditorSelect
                                 value={typeof effect.value === 'string' ? effect.value : ''}
                                 aria-invalid={valueError}
                                 onChange={(event) => updateEffect(index, { value: event.target.value })}
                               >
-                                <option value="">—</option>
                                 {damageSources.map((source) => (
                                   <option key={source.id} value={source.id}>{source.name}</option>
                                 ))}
-                              </select>
+                              </EditorSelect>
                             );
                           }
 
@@ -656,13 +817,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                               : '#64748b';
                             return (
                               <div className={styles.colorRow}>
-                                <input
-                                  className={styles.colorPicker}
-                                  type="color"
+                                <EditorColorInput
                                   value={color}
                                   onChange={(event) => updateEffect(index, { value: event.target.value })}
                                 />
-                                <input
+                                <EditorInput
                                   value={typeof effect.value === 'string' ? effect.value : ''}
                                   aria-invalid={valueError}
                                   placeholder="#64748b"

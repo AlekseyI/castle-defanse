@@ -316,39 +316,6 @@
   letter-spacing: 0.04em;
 }
 
-.field input,
-.field textarea {
-  width: 100%;
-  min-height: 42px;
-  padding: 9px 11px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  outline: none;
-  background: #080f1d;
-  color: #f8fafc;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: normal;
-  user-select: text;
-}
-
-.field textarea {
-  min-height: 116px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.field input:focus,
-.field textarea:focus {
-  border-color: #22d3ee;
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
-}
-
-.field input[aria-invalid='true'] {
-  border-color: #fb7185;
-}
-
 .fieldError {
   color: #fda4af;
   font-weight: 600;
@@ -363,11 +330,6 @@
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 8px;
-}
-
-.colorRow .colorPicker {
-  padding: 5px;
-  cursor: pointer;
 }
 
 .emptyState {
@@ -476,15 +438,10 @@
   border-color: rgba(165, 243, 252, 0.78);
 }
 
-.fileButton input {
-  display: none;
-}
-
 .toolbarButton:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
-
 
 .checkboxField {
   min-height: 44px;
@@ -498,9 +455,3 @@
   cursor: pointer;
 }
 
-.checkboxField input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: #22d3ee;
-}

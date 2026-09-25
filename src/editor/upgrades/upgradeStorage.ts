@@ -7,9 +7,10 @@ import type {
   UpgradeEffectType,
   UpgradeModifierEffectType,
   UpgradeRarity,
+  UpgradeTargetEffectType,
 } from './types';
 
-const STORAGE_KEY = 'game.upgrades.v2';
+const STORAGE_KEY = 'game.upgrades.v3';
 const CARD_KEYS = new Set(['id', 'name', 'description', 'rarity', 'weight', 'effects', 'color', 'image']);
 const EFFECT_KEYS = new Set(['type', 'abilityId', 'value']);
 const IMAGE_KEYS = new Set(['name', 'src']);
@@ -55,12 +56,14 @@ const ADD_EFFECT_TYPES = new Set<UpgradeAddEffectType>([
   'ability-add-heal',
 ]);
 const EFFECT_TYPES = new Set<UpgradeEffectType>([...MODIFIER_EFFECT_TYPES, ...ADD_EFFECT_TYPES]);
-const STRING_VALUE_TYPES = new Set<UpgradeModifierEffectType>([
+const TARGET_VALUE_TYPES = new Set<UpgradeTargetEffectType>([
   'ability-damage-target-type',
-  'ability-damage-source',
   'ability-periodic-target-type',
-  'ability-periodic-visual-color',
   'ability-slow-target-type',
+]);
+const STRING_VALUE_TYPES = new Set<UpgradeModifierEffectType>([
+  'ability-damage-source',
+  'ability-periodic-visual-color',
 ]);
 const DAMAGE_TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle']);
 const ENEMY_TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies']);
@@ -84,12 +87,16 @@ function isFiniteNonNegative(value: unknown): value is number {
 function isTarget(value: unknown, allowedTypes: Set<string>): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const target = value as Record<string, unknown>;
-  return (
-    hasOnlyKeys(target, TARGET_KEYS) &&
-    typeof target.type === 'string' && allowedTypes.has(target.type) &&
-    isFiniteNonNegative(target.count) && Number.isInteger(target.count) &&
-    isFiniteNonNegative(target.areaHeightPercent) && target.areaHeightPercent <= 100
-  );
+  if (
+    !hasOnlyKeys(target, TARGET_KEYS) ||
+    typeof target.type !== 'string' || !allowedTypes.has(target.type) ||
+    !isFiniteNonNegative(target.count) || !Number.isInteger(target.count) ||
+    !isFiniteNonNegative(target.areaHeightPercent) || target.areaHeightPercent > 100
+  ) return false;
+
+  if ((target.type === 'nearest-enemies' || target.type === 'random-enemies') && target.count < 1) return false;
+  if (target.type === 'area-enemies' && target.areaHeightPercent < 1) return false;
+  return true;
 }
 
 function isAddedEffectValue(type: UpgradeAddEffectType, value: unknown): boolean {
@@ -137,12 +144,13 @@ function isAddedEffectValue(type: UpgradeAddEffectType, value: unknown): boolean
 }
 
 function isModifierEffect(type: UpgradeModifierEffectType, value: unknown): boolean {
+  if (TARGET_VALUE_TYPES.has(type as UpgradeTargetEffectType)) {
+    const allowed = type === 'ability-damage-target-type' ? DAMAGE_TARGET_TYPES : ENEMY_TARGET_TYPES;
+    return isTarget(value, allowed);
+  }
+
   if (STRING_VALUE_TYPES.has(type)) {
     if (typeof value !== 'string' || value.trim().length === 0) return false;
-    if (type === 'ability-damage-target-type') return DAMAGE_TARGET_TYPES.has(value);
-    if (type === 'ability-periodic-target-type' || type === 'ability-slow-target-type') {
-      return ENEMY_TARGET_TYPES.has(value);
-    }
     if (type === 'ability-periodic-visual-color') return HEX_COLOR_PATTERN.test(value);
     return true;
   }
@@ -192,7 +200,9 @@ function cloneDefaults(): UpgradeCardDefinition[] {
     effects: card.effects.map((effect) => ({
       ...effect,
       value: typeof effect.value === 'object'
-        ? { ...effect.value, target: { ...effect.value.target } }
+        ? ('target' in effect.value
+          ? { ...effect.value, target: { ...effect.value.target } }
+          : { ...effect.value })
         : effect.value,
     } as UpgradeEffect)),
     image: card.image ? { ...card.image } : undefined,

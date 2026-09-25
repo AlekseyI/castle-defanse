@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_ABILITIES } from '../../../src/editor/abilities/defaultAbilities';
 import type { AbilityDefinition } from '../../../src/editor/abilities/types';
+import { DEFAULT_UPGRADES } from '../../../src/editor/upgrades/defaultUpgrades';
 import type { UpgradeCardDefinition } from '../../../src/editor/upgrades/types';
 import {
   applyAbilityRuntimeModifier,
@@ -227,21 +229,161 @@ describe('upgradeCalculator', () => {
     ]);
   });
 
-  it('does not create a missing effect from a regular modifier', () => {
+  it('creates a missing effect from regular parameters and accumulates its cards', () => {
     const damageOnlyAbility: AbilityDefinition = {
       ...ability,
       effects: [ability.effects[0]],
     };
-    const invalidRuntimeCard: UpgradeCardDefinition = {
+    const periodicCards: UpgradeCardDefinition[] = [
+      {
+        ...card,
+        id: 'periodic_damage',
+        effects: [{ type: 'ability-periodic-damage-flat', abilityId: 'fire', value: 20 }],
+      },
+      {
+        ...card,
+        id: 'periodic_duration',
+        effects: [{ type: 'ability-periodic-duration-flat', abilityId: 'fire', value: 3 }],
+      },
+      {
+        ...card,
+        id: 'periodic_chance',
+        effects: [{ type: 'ability-periodic-chance', abilityId: 'fire', value: 40 }],
+      },
+    ];
+
+    const modifiers = buildAbilityRuntimeModifiers(periodicCards, {
+      periodic_damage: 1,
+      periodic_duration: 1,
+      periodic_chance: 1,
+    });
+    const upgraded = applyAbilityRuntimeModifier(damageOnlyAbility, modifiers.fire);
+    const periodic = upgraded.effects.find((effect) => effect.type === 'periodic-damage');
+
+    expect(periodic).toEqual({
+      type: 'periodic-damage',
+      chancePercent: 40,
+      amount: 20,
+      duration: 3,
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      visualColor: '#ff0000',
+      target: { type: 'nearest-enemies', count: 1 },
+    });
+  });
+
+  it('uses target card values as exact configuration and keeps target bonuses additive', () => {
+    const targetCard: UpgradeCardDefinition = {
       ...card,
-      id: 'periodic_modifier_without_add',
-      effects: [{ type: 'ability-periodic-damage-flat', abilityId: 'fire', value: 20 }],
+      id: 'retarget',
+      effects: [
+        {
+          type: 'ability-damage-target-type',
+          abilityId: 'fire',
+          value: { type: 'nearest-enemies', count: 3, areaHeightPercent: 0 },
+        },
+        { type: 'ability-damage-target-count', abilityId: 'fire', value: 2 },
+        {
+          type: 'ability-periodic-target-type',
+          abilityId: 'fire',
+          value: { type: 'area-enemies', count: 0, areaHeightPercent: 30 },
+        },
+        { type: 'ability-periodic-area-height', abilityId: 'fire', value: 10 },
+      ],
     };
 
-    const modifiers = buildAbilityRuntimeModifiers([invalidRuntimeCard], { periodic_modifier_without_add: 1 });
-    const upgraded = applyAbilityRuntimeModifier(damageOnlyAbility, modifiers.fire);
+    const modifiers = buildAbilityRuntimeModifiers([targetCard], { retarget: 1 });
+    const upgraded = applyAbilityRuntimeModifier(ability, modifiers.fire);
+    const damage = upgraded.effects.find((effect) => effect.type === 'damage');
+    const periodic = upgraded.effects.find((effect) => effect.type === 'periodic-damage');
 
-    expect(upgraded.effects).toHaveLength(1);
-    expect(upgraded.effects[0].type).toBe('damage');
+    expect(damage?.target).toEqual({ type: 'nearest-enemies', count: 5 });
+    expect(periodic?.target).toEqual({ type: 'area-enemies', areaHeightPercent: 40 });
   });
+
+  it('improves effects that were introduced by other default cards', () => {
+    const byId = new Map(DEFAULT_UPGRADES.map((item) => [item.id, item]));
+
+    const ice = DEFAULT_ABILITIES.find((item) => item.id === 'ice');
+    const lightning = DEFAULT_ABILITIES.find((item) => item.id === 'lightning');
+    const fire = DEFAULT_ABILITIES.find((item) => item.id === 'fire');
+    const shield = DEFAULT_ABILITIES.find((item) => item.id === 'shield');
+    if (!ice || !lightning || !fire || !shield) throw new Error('Expected default abilities.');
+
+    const selectedIds = [
+      'add_damage_small',
+      'ice_added_damage_boost',
+      'ice_added_damage_critical',
+      'ice_added_damage_targets',
+      'add_periodic_small',
+      'lightning_added_periodic_boost',
+      'lightning_added_periodic_critical',
+      'lightning_added_periodic_targets',
+      'add_slow_small',
+      'fire_added_slow_boost',
+      'fire_added_slow_targets',
+      'add_heal_small',
+      'fire_added_heal_boost',
+      'add_damage_max',
+      'shield_added_damage_boost',
+    ];
+    const selectedCards = selectedIds.map((id) => {
+      const item = byId.get(id);
+      if (!item) throw new Error(`Expected default upgrade ${id}.`);
+      return item;
+    });
+    const counts = Object.fromEntries(selectedIds.map((id) => [id, 1]));
+    const modifiers = buildAbilityRuntimeModifiers(selectedCards, counts);
+
+    const upgradedIce = applyAbilityRuntimeModifier(ice, modifiers.ice);
+    const iceDamage = upgradedIce.effects.find((effect) => effect.type === 'damage');
+    expect(iceDamage).toEqual({
+      type: 'damage',
+      amount: 9.25,
+      damageSourceId: 'ice',
+      criticalChancePercent: 20,
+      criticalMultiplier: 1,
+      target: { type: 'nearest-enemies', count: 2 },
+    });
+
+    const upgradedLightning = applyAbilityRuntimeModifier(lightning, modifiers.lightning);
+    const lightningPeriodic = upgradedLightning.effects.find((effect) => effect.type === 'periodic-damage');
+    expect(lightningPeriodic).toEqual({
+      type: 'periodic-damage',
+      chancePercent: 30,
+      amount: 5,
+      duration: 2.5,
+      criticalChancePercent: 20,
+      criticalMultiplier: 1,
+      visualColor: '#000000',
+      target: { type: 'nearest-enemies', count: 2 },
+    });
+
+    const upgradedFire = applyAbilityRuntimeModifier(fire, modifiers.fire);
+    const fireSlow = upgradedFire.effects.find((effect) => effect.type === 'slow');
+    const fireHeal = upgradedFire.effects.find((effect) => effect.type === 'heal');
+    expect(fireSlow).toEqual({
+      type: 'slow',
+      slowPercent: 11,
+      duration: 1.5,
+      target: { type: 'nearest-enemies', count: 3 },
+    });
+    expect(fireHeal).toEqual({
+      type: 'heal',
+      amount: 6.25,
+      target: { type: 'castle' },
+    });
+
+    const upgradedShield = applyAbilityRuntimeModifier(shield, modifiers.shield);
+    const shieldDamage = upgradedShield.effects.find((effect) => effect.type === 'damage');
+    expect(shieldDamage).toEqual({
+      type: 'damage',
+      amount: 250,
+      damageSourceId: 'fire',
+      criticalChancePercent: 100,
+      criticalMultiplier: 3,
+      target: { type: 'area-enemies', areaHeightPercent: 100 },
+    });
+  });
+
 });

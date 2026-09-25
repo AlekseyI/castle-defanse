@@ -287,13 +287,6 @@
   overflow: hidden;
 }
 
-.fileButton input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
 .formSection {
   margin-bottom: 18px;
   padding: 22px;
@@ -319,42 +312,6 @@
   letter-spacing: 0.04em;
 }
 
-.field input,
-.field textarea,
-.field select {
-  width: 100%;
-  min-height: 42px;
-  box-sizing: border-box;
-  padding: 9px 11px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  outline: none;
-  background: #080f1d;
-  color: #f8fafc;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: normal;
-}
-
-.field textarea {
-  min-height: 116px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.field input:focus,
-.field textarea:focus,
-.field select:focus {
-  border-color: #22d3ee;
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
-}
-
-.field input[aria-invalid='true'],
-.field select[aria-invalid='true'] {
-  border-color: #fb7185;
-}
-
 .fieldError {
   color: #fda4af;
   font-size: 11px;
@@ -368,11 +325,6 @@
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 8px;
-}
-
-.colorRow .colorPicker {
-  padding: 5px;
-  cursor: pointer;
 }
 
 .effectsHeader {

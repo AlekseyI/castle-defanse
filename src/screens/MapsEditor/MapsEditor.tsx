@@ -5,6 +5,7 @@ import {
   useState,
   type ChangeEvent,
 } from 'react';
+import { EditorCheckbox, EditorColorInput, EditorFileInput, EditorInput, EditorSelect } from '../../components/EditorControls';
 import {
   clampRepeatLastWaves,
   cloneMap,
@@ -456,7 +457,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span>ID</span>
-                  <input
+                  <EditorInput
                     value={draft.id}
                     aria-invalid={Boolean(validation.errors.id)}
                     onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
@@ -468,7 +469,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                 </label>
                 <label className={styles.field}>
                   <span>Название</span>
-                  <input
+                  <EditorInput
                     value={draft.name}
                     aria-invalid={Boolean(validation.errors.name)}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -488,7 +489,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                 <div className={styles.inlineActions}>
                   <label className={styles.fileButton}>
                     Загрузить фон
-                    <input type="file" accept="image/*,.svg" onChange={handleBackgroundUpload} />
+                    <EditorFileInput mode="overlay" accept="image/*,.svg" onChange={handleBackgroundUpload} />
                   </label>
                   <button
                     className={styles.toolbarButton}
@@ -514,16 +515,15 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   <label className={styles.field}>
                     <span>Цвет фона</span>
                     <div className={styles.colorRow}>
-                      <input
-                        className={styles.colorInput}
-                        type="color"
+                      <EditorColorInput
+                        className={styles.backgroundColorInput}
                         value={/^#[0-9a-f]{6}$/i.test(draft.background.color) ? draft.background.color : '#0b1020'}
                         onChange={(event) => setDraft((current) => ({
                           ...current,
                           background: { ...current.background, color: event.target.value },
                         }))}
                       />
-                      <input
+                      <EditorInput
                         value={draft.background.color}
                         aria-invalid={Boolean(validation.errors.backgroundColor)}
                         onChange={(event) => setDraft((current) => ({
@@ -537,7 +537,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                   <label className={styles.field}>
                     <span>Режим изображения</span>
-                    <select
+                    <EditorSelect
                       value={draft.background.fit}
                       onChange={(event) => setDraft((current) => ({
                         ...current,
@@ -549,7 +549,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                     >
                       <option value="cover">Cover — заполнить canvas</option>
                       <option value="contain">Contain — показать целиком</option>
-                    </select>
+                    </EditorSelect>
                   </label>
 
                   <div className={styles.fileInfo}>
@@ -567,8 +567,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   <p>После созданных вручную волн повторяются последние N волн с усилением каждого цикла.</p>
                 </div>
                 <label className={styles.switchLabel}>
-                  <input
-                    type="checkbox"
+                  <EditorCheckbox
+                    className={styles.mapCheckbox}
                     checked={draft.endless.enabled}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
@@ -582,7 +582,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
               <div className={`${styles.formGrid} ${!draft.endless.enabled ? styles.disabledSection : ''}`}>
                 <label className={styles.field}>
                   <span>Повторять последние волн (макс. {draft.waves.length})</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="1"
                     max={Math.max(1, draft.waves.length)}
@@ -604,7 +604,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>HP за цикл, +%</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -622,7 +622,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Урон за цикл, +%</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -640,7 +640,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Скорость за цикл, +%</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -658,7 +658,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Количество за цикл, +</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="1"
@@ -676,7 +676,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Сокращение интервала за цикл, %</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     max="100"
@@ -695,7 +695,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Минимальный интервал, сек.</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="0"
                     step="0.05"
@@ -724,8 +724,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
               <div className={styles.rewardSettings}>
                 <label className={styles.checkboxField}>
-                  <input
-                    type="checkbox"
+                  <EditorCheckbox
+                    className={styles.mapCheckbox}
                     checked={draft.upgradeSettings.enabled}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
@@ -737,7 +737,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Количество карточек</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="1"
                     step="1"
@@ -754,7 +754,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                 <label className={styles.field}>
                   <span>Максимальное количество получений одной карточки</span>
-                  <input
+                  <EditorInput
                     type="number"
                     min="1"
                     step="1"
@@ -770,8 +770,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                 </label>
 
                 <label className={styles.checkboxField}>
-                  <input
-                    type="checkbox"
+                  <EditorCheckbox
+                    className={styles.mapCheckbox}
                     checked={draft.upgradeSettings.rewardOnBossKill}
                     onChange={(event) => setDraft((current) => ({
                       ...current,
@@ -800,7 +800,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                 <div className={styles.waveGeneratorFields}>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Количество волн</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -810,7 +810,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   </label>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Юнитов от</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -820,7 +820,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   </label>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Юнитов до</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -830,7 +830,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   </label>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Разных юнитов от</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -840,7 +840,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   </label>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Разных юнитов до</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -850,7 +850,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   </label>
                   <label className={`${styles.field} ${styles.compactField}`}>
                     <span>Босс каждые N волн</span>
-                    <input
+                    <EditorInput
                       type="number"
                       min="1"
                       step="1"
@@ -907,7 +907,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                               <label className={styles.field}>
                                 <span>Юнит</span>
                                 <div className={styles.unitPicker}>
-                                  <input
+                                  <EditorInput
                                     type="search"
                                     value={unitFilter}
                                     placeholder="Фильтр по названию..."
@@ -924,7 +924,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                                       }
                                     }}
                                   />
-                                  <select
+                                  <EditorSelect
                                     value={selectedUnitId}
                                     aria-invalid={Boolean(validation.errors[`${errorKey}.unitId`])}
                                     onChange={(event) => updateBlock(wave.id, block.id, { unitId: event.target.value })}
@@ -934,7 +934,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                                     {filteredUnits.map((unit) => (
                                       <option key={unit.id} value={unit.id}>{unit.name}</option>
                                     ))}
-                                  </select>
+                                  </EditorSelect>
                                 </div>
                                 {validation.errors[`${errorKey}.unitId`] && (
                                   <small className={styles.fieldError}>{validation.errors[`${errorKey}.unitId`]}</small>
@@ -943,7 +943,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                               <label className={`${styles.field} ${styles.compactField}`}>
                                 <span>Количество</span>
-                                <input
+                                <EditorInput
                                   type="number"
                                   min="1"
                                   step="1"
@@ -958,7 +958,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                               <label className={`${styles.field} ${styles.compactField}`}>
                                 <span>Интервал, сек.</span>
-                                <input
+                                <EditorInput
                                   type="number"
                                   min="0"
                                   step="0.05"
@@ -973,7 +973,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                               <label className={`${styles.field} ${styles.compactField} ${styles.conditionField}`}>
                                 <span>Условие запуска</span>
-                                <select
+                                <EditorSelect
                                   value={block.startWhen}
                                   onChange={(event) => updateBlock(wave.id, block.id, {
                                     startWhen: event.target.value as WaveBlockStartCondition,
@@ -982,7 +982,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                                   {Object.entries(START_CONDITION_LABELS).map(([value, label]) => (
                                     <option key={value} value={value}>{label}</option>
                                   ))}
-                                </select>
+                                </EditorSelect>
                               </label>
                             </div>
                             <button
@@ -1003,8 +1003,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                       <div className={styles.rewardSettings}>
                         <label className={styles.checkboxField}>
-                          <input
-                            type="checkbox"
+                          <EditorCheckbox
+                            className={styles.mapCheckbox}
                             checked={wave.upgradeReward.override}
                             onChange={(event) => updateWave(wave.id, (currentWave) => ({
                               ...currentWave,
@@ -1021,8 +1021,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                         </label>
 
                         <label className={styles.checkboxField}>
-                          <input
-                            type="checkbox"
+                          <EditorCheckbox
+                            className={styles.mapCheckbox}
                             disabled={!wave.upgradeReward.override}
                             checked={wave.upgradeReward.override ? wave.upgradeReward.enabled : draft.upgradeSettings.enabled}
                             onChange={(event) => updateWave(wave.id, (currentWave) => ({
@@ -1035,7 +1035,7 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
 
                         <label className={styles.field}>
                           <span>Количество карточек</span>
-                          <input
+                          <EditorInput
                             type="number"
                             min="1"
                             step="1"

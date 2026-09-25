@@ -14,6 +14,8 @@ import type {
   UpgradeEffectType,
   UpgradeEffectValue,
   UpgradeRarity,
+  UpgradeTargetEffectType,
+  UpgradeTargetValue,
 } from './types';
 
 export interface UpgradeValidationResult {
@@ -40,27 +42,27 @@ export const UPGRADE_EFFECT_OPTIONS: UpgradeEffectOption[] = [
   { type: 'ability-damage-flat', label: 'Основной урон, значение', abilityEffectType: 'damage', valueKind: 'number' },
   { type: 'ability-damage-target-type', label: 'Тип цели основного урона', abilityEffectType: 'damage', valueKind: 'target-type' },
   { type: 'ability-damage-target-count', label: 'Дополнительные цели основного урона', abilityEffectType: 'damage', valueKind: 'number' },
-  { type: 'ability-damage-area-height', label: 'Высота области основного урона, процентные пункты', abilityEffectType: 'damage', valueKind: 'number' },
+  { type: 'ability-damage-area-height', label: 'Высота области основного урона, %', abilityEffectType: 'damage', valueKind: 'number' },
   { type: 'ability-damage-source', label: 'Источник основного урона', abilityEffectType: 'damage', valueKind: 'damage-source' },
-  { type: 'ability-damage-critical-chance', label: 'Шанс крита основного урона, процентные пункты', abilityEffectType: 'damage', valueKind: 'number' },
+  { type: 'ability-damage-critical-chance', label: 'Шанс крита основного урона, %', abilityEffectType: 'damage', valueKind: 'number' },
   { type: 'ability-damage-critical-multiplier', label: 'Прирост множителя крита основного урона', abilityEffectType: 'damage', valueKind: 'number' },
   { type: 'ability-add-periodic-damage', label: 'Добавить периодический урон', abilityEffectType: 'periodic-damage', valueKind: 'add-effect' },
   { type: 'ability-periodic-damage-percent', label: 'Периодический урон, %', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-damage-flat', label: 'Периодический урон, значение', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-target-type', label: 'Тип цели периодического урона', abilityEffectType: 'periodic-damage', valueKind: 'target-type' },
   { type: 'ability-periodic-target-count', label: 'Дополнительные цели периодического урона', abilityEffectType: 'periodic-damage', valueKind: 'number' },
-  { type: 'ability-periodic-area-height', label: 'Высота области периодического урона, процентные пункты', abilityEffectType: 'periodic-damage', valueKind: 'number' },
-  { type: 'ability-periodic-chance', label: 'Шанс периодического урона, процентные пункты', abilityEffectType: 'periodic-damage', valueKind: 'number' },
-  { type: 'ability-periodic-critical-chance', label: 'Шанс крита периодического урона, процентные пункты', abilityEffectType: 'periodic-damage', valueKind: 'number' },
+  { type: 'ability-periodic-area-height', label: 'Высота области периодического урона, %', abilityEffectType: 'periodic-damage', valueKind: 'number' },
+  { type: 'ability-periodic-chance', label: 'Шанс периодического урона, %', abilityEffectType: 'periodic-damage', valueKind: 'number' },
+  { type: 'ability-periodic-critical-chance', label: 'Шанс крита периодического урона, %', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-critical-multiplier', label: 'Прирост множителя крита периодического урона', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-duration-percent', label: 'Длительность периодического урона, %', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-duration-flat', label: 'Длительность периодического урона, сек.', abilityEffectType: 'periodic-damage', valueKind: 'number' },
   { type: 'ability-periodic-visual-color', label: 'Цвет периодического эффекта', abilityEffectType: 'periodic-damage', valueKind: 'color' },
   { type: 'ability-add-slow', label: 'Добавить замедление', abilityEffectType: 'slow', valueKind: 'add-effect' },
-  { type: 'ability-slow-percent', label: 'Сила замедления, процентные пункты', abilityEffectType: 'slow', valueKind: 'number' },
+  { type: 'ability-slow-percent', label: 'Сила замедления, %', abilityEffectType: 'slow', valueKind: 'number' },
   { type: 'ability-slow-target-type', label: 'Тип цели замедления', abilityEffectType: 'slow', valueKind: 'target-type' },
   { type: 'ability-slow-target-count', label: 'Дополнительные цели замедления', abilityEffectType: 'slow', valueKind: 'number' },
-  { type: 'ability-slow-area-height', label: 'Высота области замедления, процентные пункты', abilityEffectType: 'slow', valueKind: 'number' },
+  { type: 'ability-slow-area-height', label: 'Высота области замедления, %', abilityEffectType: 'slow', valueKind: 'number' },
   { type: 'ability-slow-duration-percent', label: 'Длительность замедления, %', abilityEffectType: 'slow', valueKind: 'number' },
   { type: 'ability-slow-duration-flat', label: 'Длительность замедления, сек.', abilityEffectType: 'slow', valueKind: 'number' },
   { type: 'ability-add-heal', label: 'Добавить лечение', abilityEffectType: 'heal', valueKind: 'add-effect' },
@@ -78,24 +80,36 @@ function getAbilityEffect(ability: AbilityDefinition | undefined, type: AbilityE
 
 export function getCompatibleUpgradeEffectTypes(ability?: AbilityDefinition): UpgradeEffectType[] {
   if (!ability) return [];
-
-  return UPGRADE_EFFECT_OPTIONS
-    .filter((option) => {
-      const hasEffect = Boolean(getAbilityEffect(ability, option.abilityEffectType));
-      return option.valueKind === 'add-effect' ? !hasEffect : hasEffect;
-    })
-    .map((option) => option.type);
+  return UPGRADE_EFFECT_OPTIONS.map((option) => option.type);
 }
 
 export function isUpgradeEffectCompatible(effect: UpgradeEffect, ability?: AbilityDefinition): boolean {
-  return Boolean(ability && getCompatibleUpgradeEffectTypes(ability).includes(effect.type));
+  return Boolean(ability && getUpgradeEffectOption(effect.type));
+}
+
+const TARGET_EFFECT_TYPES = new Set<UpgradeTargetEffectType>([
+  'ability-damage-target-type',
+  'ability-periodic-target-type',
+  'ability-slow-target-type',
+]);
+
+function isTargetEffectType(type: UpgradeEffectType): type is UpgradeTargetEffectType {
+  return TARGET_EFFECT_TYPES.has(type as UpgradeTargetEffectType);
 }
 
 function createAddedTarget(type: AbilityEffectType): UpgradeAddedTarget {
   return {
     type: type === 'heal' ? 'castle' : (type === 'slow' ? 'all-enemies' : 'nearest-enemies'),
-    count: 0,
+    count: type === 'damage' || type === 'periodic-damage' ? 1 : 0,
     areaHeightPercent: 0,
+  };
+}
+
+function abilityTargetToUpgradeTarget(target: { type: AbilityTargetType; count?: number; areaHeightPercent?: number }): UpgradeTargetValue {
+  return {
+    type: target.type,
+    count: target.type === 'nearest-enemies' || target.type === 'random-enemies' ? (target.count ?? 1) : 0,
+    areaHeightPercent: target.type === 'area-enemies' ? (target.areaHeightPercent ?? 50) : 0,
   };
 }
 
@@ -150,10 +164,8 @@ export function getDefaultUpgradeEffectValue(
   const abilityEffect = getAbilityEffect(ability, option.abilityEffectType);
 
   if (option.valueKind === 'target-type') {
-    if (abilityEffect) return abilityEffect.target.type;
-    if (option.abilityEffectType === 'heal') return 'castle';
-    if (option.abilityEffectType === 'slow') return 'all-enemies';
-    return 'nearest-enemies';
+    if (abilityEffect) return abilityTargetToUpgradeTarget(abilityEffect.target);
+    return abilityTargetToUpgradeTarget(createAddedTarget(option.abilityEffectType));
   }
 
   if (option.valueKind === 'damage-source') {
@@ -178,7 +190,8 @@ function cloneAddedTarget(target: UpgradeAddedTarget): UpgradeAddedTarget {
 
 function cloneEffectValue(value: UpgradeEffectValue): UpgradeEffectValue {
   if (typeof value !== 'object') return value;
-  return { ...value, target: cloneAddedTarget(value.target) } as UpgradeAddEffectValue;
+  if ('target' in value) return { ...value, target: cloneAddedTarget(value.target) } as UpgradeAddEffectValue;
+  return { ...value } as UpgradeTargetValue;
 }
 
 function cloneEffect(effect: UpgradeEffect): UpgradeEffect {
@@ -229,21 +242,38 @@ export function normalizeAddedTarget(target: UpgradeAddedTarget): UpgradeAddedTa
   };
 }
 
+export function changeUpgradeTargetType(
+  target: UpgradeTargetValue,
+  type: AbilityTargetType,
+): UpgradeTargetValue {
+  return normalizeAddedTarget({
+    ...target,
+    type,
+    count: type === 'nearest-enemies' || type === 'random-enemies'
+      ? (target.count > 0 ? target.count : 1)
+      : 0,
+    areaHeightPercent: type === 'area-enemies'
+      ? (target.areaHeightPercent > 0 ? target.areaHeightPercent : 50)
+      : 0,
+  });
+}
+
 export function changeAddedTargetType(
   value: UpgradeAddEffectValue,
   type: AbilityTargetType,
 ): UpgradeAddEffectValue {
   return {
     ...value,
-    target: normalizeAddedTarget({ ...value.target, type }),
+    target: changeUpgradeTargetType(value.target, type),
   } as UpgradeAddEffectValue;
 }
 
 function normalizeEffectValue(effect: UpgradeEffect): UpgradeEffectValue {
   if (typeof effect.value === 'string') return effect.value.trim().toLowerCase();
   if (typeof effect.value === 'number') return effect.value;
+  if (isTargetEffectType(effect.type)) return normalizeAddedTarget(effect.value as UpgradeTargetValue);
 
-  const value = effect.value;
+  const value = effect.value as UpgradeAddEffectValue;
   if (effect.type === 'ability-add-damage') {
     const added = value as UpgradeAddedDamageValue;
     return {
@@ -321,11 +351,15 @@ function validateAddedTarget(
   if (!getAllowedTargets(effectType).includes(target.type)) {
     return 'Выберите допустимый тип цели.';
   }
-  if (!finiteNonNegative(target.count) || !Number.isInteger(target.count)) {
-    return 'Количество целей должно быть целым числом от 0.';
+  if (target.type === 'nearest-enemies' || target.type === 'random-enemies') {
+    if (!Number.isInteger(target.count) || target.count < 1) {
+      return 'Количество целей должно быть целым числом от 1.';
+    }
   }
-  if (!finiteNonNegative(target.areaHeightPercent) || target.areaHeightPercent > 100) {
-    return 'Высота области должна быть от 0 до 100%.';
+  if (target.type === 'area-enemies') {
+    if (!Number.isFinite(target.areaHeightPercent) || target.areaHeightPercent < 1 || target.areaHeightPercent > 100) {
+      return 'Высота области должна быть от 1 до 100%.';
+    }
   }
   return undefined;
 }
@@ -339,7 +373,8 @@ function validateAddedEffectValue(
     return 'Укажите параметры добавляемого эффекта.';
   }
 
-  const targetError = validateAddedTarget(effect.value.target, option.abilityEffectType);
+  const addedValue = effect.value as UpgradeAddEffectValue;
+  const targetError = validateAddedTarget(addedValue.target, option.abilityEffectType);
   if (targetError) return targetError;
 
   if (effect.type === 'ability-add-damage') {
@@ -416,15 +451,15 @@ function validateEffectValue(
     return undefined;
   }
 
-  if (typeof effect.value !== 'string' || !effect.value) {
-    return 'Укажите значение.';
+  if (option.valueKind === 'target-type') {
+    if (typeof effect.value !== 'object' || !effect.value || Array.isArray(effect.value) || 'target' in effect.value) {
+      return 'Укажите тип цели и его параметры.';
+    }
+    return validateAddedTarget(effect.value as UpgradeTargetValue, option.abilityEffectType);
   }
 
-  if (option.valueKind === 'target-type') {
-    if (!getAllowedTargets(option.abilityEffectType).includes(effect.value as AbilityTargetType)) {
-      return 'Выберите допустимый тип цели.';
-    }
-    return undefined;
+  if (typeof effect.value !== 'string' || !effect.value) {
+    return 'Укажите значение.';
   }
 
   if (option.valueKind === 'damage-source') {
