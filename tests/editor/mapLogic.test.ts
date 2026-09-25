@@ -19,7 +19,7 @@ const map: MapDefinition = {
     color: '#0b1020',
     fit: 'cover',
   },
-  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
+  upgradeSettings: { enabled: false, cardCount: 3, maxCardReceives: 5, rewardOnBossKill: false },
   waves: [
     {
       id: 'wave_1',
@@ -110,7 +110,7 @@ describe('mapLogic', () => {
     const result = validateMap(
       {
         ...map,
-        upgradeSettings: { ...map.upgradeSettings, cardCount: 0 },
+        upgradeSettings: { ...map.upgradeSettings, cardCount: 0, maxCardReceives: 0 },
         waves: [{
           id: 'wave_1',
           blocks: [{
@@ -134,6 +134,7 @@ describe('mapLogic', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors.upgradeCardCount).toBeTruthy();
+    expect(result.errors.upgradeMaxCardReceives).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.unitId']).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.count']).toBeTruthy();
     expect(result.errors['wave.wave_1.block.block_1.spawnEvery']).toBeTruthy();
@@ -277,11 +278,13 @@ describe('mapLogic', () => {
   it('deep-clones background, waves and endless settings for editor drafts', () => {
     const cloned = cloneMap(map);
     cloned.upgradeSettings.cardCount = 9;
+    cloned.upgradeSettings.maxCardReceives = 2;
     cloned.waves[0].blocks[0].count = 99;
     cloned.endless.hpGrowthPercent = 50;
     cloned.waves[0].upgradeReward.cardCount = 7;
 
     expect(map.upgradeSettings.cardCount).toBe(3);
+    expect(map.upgradeSettings.maxCardReceives).toBe(5);
     expect(map.waves[0].blocks[0].count).toBe(5);
     expect(map.waves[0].upgradeReward.cardCount).toBe(3);
     expect(map.endless.hpGrowthPercent).toBe(10);

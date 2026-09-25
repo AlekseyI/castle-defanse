@@ -19,7 +19,7 @@ export function createActiveAreaEffect<T>(effect: AreaAbilityEffect): ActiveArea
 }
 
 export function getAreaTop(battleHeight: number, heightPercent: number): number {
-  const clampedHeightPercent = Math.max(1, Math.min(100, heightPercent));
+  const clampedHeightPercent = Math.max(0, Math.min(100, heightPercent));
   return battleHeight * (1 - clampedHeightPercent / 100);
 }
 

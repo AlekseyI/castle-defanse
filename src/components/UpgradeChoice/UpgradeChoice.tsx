@@ -17,7 +17,27 @@ const TARGET_LABELS: Record<string, string> = {
   castle: 'Замок',
 };
 
+function formatTarget(target: { type: string; count: number; areaHeightPercent: number }): string {
+  const label = TARGET_LABELS[target.type] ?? target.type;
+  if (target.type === 'nearest-enemies' || target.type === 'random-enemies') return `${label}, целей: ${target.count}`;
+  if (target.type === 'area-enemies') return `${label}, высота: ${target.areaHeightPercent}%`;
+  return label;
+}
+
 function formatValue(effect: UpgradeEffect): string {
+  if (typeof effect.value === 'object') {
+    if (effect.type === 'ability-add-damage') {
+      return `урон ${effect.value.amount}; источник ${effect.value.damageSourceId || '—'}; крит ${effect.value.criticalChancePercent}% ×${effect.value.criticalMultiplier}; ${formatTarget(effect.value.target)}`;
+    }
+    if (effect.type === 'ability-add-periodic-damage') {
+      return `урон ${effect.value.amount}; шанс ${effect.value.chancePercent}%; ${effect.value.duration} сек.; крит ${effect.value.criticalChancePercent}% ×${effect.value.criticalMultiplier}; цвет ${effect.value.visualColor}; ${formatTarget(effect.value.target)}`;
+    }
+    if (effect.type === 'ability-add-slow') {
+      return `замедление ${effect.value.slowPercent}%; ${effect.value.duration} сек.; ${formatTarget(effect.value.target)}`;
+    }
+    return `лечение ${effect.value.amount}; ${formatTarget(effect.value.target)}`;
+  }
+
   if (typeof effect.value === 'string') {
     if (effect.type.endsWith('-target-type')) return TARGET_LABELS[effect.value] ?? effect.value;
     return effect.value;
@@ -40,6 +60,7 @@ function formatValue(effect: UpgradeEffect): string {
 export function UpgradeChoice({ onSelect }: UpgradeChoiceProps) {
   const choices = useGameStore((state) => state.upgradeChoices);
   const counts = useGameStore((state) => state.upgradeCounts);
+  const maxCardReceives = useGameStore((state) => state.upgradeMaxCardReceives);
   const abilities = useMemo(() => loadAbilities(), []);
   const abilityNames = useMemo(
     () => new Map(abilities.map((ability) => [ability.id, ability.name])),
@@ -77,7 +98,7 @@ export function UpgradeChoice({ onSelect }: UpgradeChoiceProps) {
                     </li>
                   ))}
                 </ul>
-                <span className={styles.count}>Получено: {counts[card.id] ?? 0} / {card.maxCount}</span>
+                <span className={styles.count}>Получено: {counts[card.id] ?? 0} / {maxCardReceives}</span>
               </div>
             </button>
           ))}

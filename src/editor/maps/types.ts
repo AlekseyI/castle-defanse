@@ -23,6 +23,7 @@ export interface WaveSpawnBlock {
 export interface MapUpgradeSettings {
   enabled: boolean;
   cardCount: number;
+  maxCardReceives: number;
   rewardOnBossKill: boolean;
 }
 

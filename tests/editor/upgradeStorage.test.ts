@@ -21,7 +21,6 @@ const card: UpgradeCardDefinition = {
   description: '+20% основного урона',
   rarity: 'common',
   weight: 100,
-  maxCount: 5,
   effects: [{ type: 'ability-damage-percent', abilityId: 'fire', value: 20 }],
 };
 
@@ -30,6 +29,36 @@ describe('upgradeStorage', () => {
     installLocalStorage();
     persistUpgrades([card]);
     expect(loadUpgrades()).toEqual([card]);
+  });
+
+  it('persists added effects with every parameter stored explicitly', () => {
+    installLocalStorage();
+    const withAddedEffect: UpgradeCardDefinition = {
+      ...card,
+      id: 'ignite',
+      effects: [
+        {
+          type: 'ability-add-periodic-damage',
+          abilityId: 'bolt',
+          value: {
+            chancePercent: 0,
+            amount: 20,
+            duration: 0,
+            criticalChancePercent: 0,
+            criticalMultiplier: 0,
+            visualColor: '#000000',
+            target: {
+              type: 'nearest-enemies',
+              count: 0,
+              areaHeightPercent: 0,
+            },
+          },
+        },
+      ],
+    };
+
+    persistUpgrades([withAddedEffect]);
+    expect(loadUpgrades()).toEqual([withAddedEffect]);
   });
 
   it('persists and loads negative numeric trade-off effects', () => {
@@ -63,13 +92,14 @@ describe('upgradeStorage', () => {
     expect(loadUpgrades()).toEqual([current]);
   });
 
-  it('does not load the previous v1 card json format', () => {
+  it('rejects the old card json format with maxCount instead of migrating it', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.upgrades.v1', JSON.stringify([{
-      id: 'legacy',
-      name: 'Legacy',
-      effects: [],
+    window.localStorage.setItem('game.upgrades.v2', JSON.stringify([{
+      ...card,
+      maxCount: 5,
     }]));
+
     expect(loadUpgrades()).toEqual(DEFAULT_UPGRADES);
   });
+
 });

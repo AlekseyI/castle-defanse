@@ -1,6 +1,8 @@
+import type { AbilityTargetType } from '../abilities/types';
+
 export type UpgradeRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
-export type UpgradeEffectType =
+export type UpgradeModifierEffectType =
   | 'ability-damage-percent'
   | 'ability-damage-flat'
   | 'ability-damage-target-type'
@@ -29,13 +31,67 @@ export type UpgradeEffectType =
   | 'ability-heal-percent'
   | 'ability-heal-flat';
 
-export type UpgradeEffectValue = number | string;
+export type UpgradeAddEffectType =
+  | 'ability-add-damage'
+  | 'ability-add-periodic-damage'
+  | 'ability-add-slow'
+  | 'ability-add-heal';
 
-export interface UpgradeEffect {
-  type: UpgradeEffectType;
-  abilityId: string;
-  value: UpgradeEffectValue;
+export type UpgradeEffectType = UpgradeModifierEffectType | UpgradeAddEffectType;
+
+export interface UpgradeAddedTarget {
+  type: AbilityTargetType;
+  count: number;
+  areaHeightPercent: number;
 }
+
+export interface UpgradeAddedDamageValue {
+  amount: number;
+  damageSourceId: string;
+  criticalChancePercent: number;
+  criticalMultiplier: number;
+  target: UpgradeAddedTarget;
+}
+
+export interface UpgradeAddedPeriodicDamageValue {
+  chancePercent: number;
+  amount: number;
+  duration: number;
+  criticalChancePercent: number;
+  criticalMultiplier: number;
+  visualColor: string;
+  target: UpgradeAddedTarget;
+}
+
+export interface UpgradeAddedSlowValue {
+  slowPercent: number;
+  duration: number;
+  target: UpgradeAddedTarget;
+}
+
+export interface UpgradeAddedHealValue {
+  amount: number;
+  target: UpgradeAddedTarget;
+}
+
+export type UpgradeAddEffectValue =
+  | UpgradeAddedDamageValue
+  | UpgradeAddedPeriodicDamageValue
+  | UpgradeAddedSlowValue
+  | UpgradeAddedHealValue;
+
+export type UpgradeEffectValue = number | string | UpgradeAddEffectValue;
+
+interface UpgradeEffectBase {
+  abilityId: string;
+}
+
+export type UpgradeEffect =
+  | (UpgradeEffectBase & { type: UpgradeModifierEffectType; value: number | string })
+  | (UpgradeEffectBase & { type: 'ability-add-damage'; value: UpgradeAddedDamageValue })
+  | (UpgradeEffectBase & { type: 'ability-add-periodic-damage'; value: UpgradeAddedPeriodicDamageValue })
+  | (UpgradeEffectBase & { type: 'ability-add-slow'; value: UpgradeAddedSlowValue })
+  | (UpgradeEffectBase & { type: 'ability-add-heal'; value: UpgradeAddedHealValue });
 
 export interface UpgradeCardImage {
   name: string;
@@ -48,7 +104,6 @@ export interface UpgradeCardDefinition {
   description: string;
   rarity: UpgradeRarity;
   weight: number;
-  maxCount: number;
   effects: UpgradeEffect[];
   color?: string;
   image?: UpgradeCardImage;

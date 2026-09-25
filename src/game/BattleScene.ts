@@ -122,6 +122,7 @@ export class BattleScene extends Container {
     useGameStore.getState().reset(
       this.map.endless.enabled ? 0 : this.map.waves.length,
       [...this.abilitiesById.keys()],
+      this.map.upgradeSettings.maxCardReceives,
     );
     this.loadMapBackground();
     this.buildCastle();
@@ -253,6 +254,7 @@ export class BattleScene extends Container {
         this.upgradeCards,
         state.upgradeCounts,
         effectiveReward.cardCount,
+        this.map.upgradeSettings.maxCardReceives,
       );
       if (choices.length > 0) {
         this.pendingWaveAdvance = true;
@@ -707,7 +709,7 @@ export class BattleScene extends Container {
     }
     if (target.type === 'castle') return [];
 
-    const limit = Math.max(1, Math.floor(target.count ?? 1));
+    const limit = target.count === undefined ? 1 : Math.max(0, Math.floor(target.count));
     if (target.type === 'random-enemies') return this.randomEnemies(limit);
     return this.closestEnemies(limit);
   }
@@ -913,6 +915,7 @@ export class BattleScene extends Container {
     useGameStore.getState().reset(
       this.map.endless.enabled ? 0 : this.map.waves.length,
       [...this.abilitiesById.keys()],
+      this.map.upgradeSettings.maxCardReceives,
     );
   }
 }

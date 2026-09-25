@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_ABILITIES } from '../../src/editor/abilities/defaultAbilities';
 import type { AbilityDefinition } from '../../src/editor/abilities/types';
+import { DEFAULT_DAMAGE_SOURCES } from '../../src/editor/damageSources/defaultDamageSources';
+import { DEFAULT_UPGRADES } from '../../src/editor/upgrades/defaultUpgrades';
 import {
+  changeAddedTargetType,
   getCompatibleUpgradeEffectTypes,
+  getDefaultUpgradeEffectValue,
   normalizeUpgradeCard,
   validateUpgradeCard,
 } from '../../src/editor/upgrades/upgradeLogic';
@@ -34,6 +39,22 @@ const abilities: AbilityDefinition[] = [
     visualEffect: 'fire',
     color: '#ff0000',
   },
+  {
+    id: 'bolt',
+    name: 'Разряд',
+    effects: [
+      {
+        type: 'damage',
+        amount: 30,
+        damageSourceId: 'magic',
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        target: { type: 'nearest-enemies', count: 1 },
+      },
+    ],
+    visualEffect: 'lightning',
+    color: '#00aaff',
+  },
 ];
 
 const card: UpgradeCardDefinition = {
@@ -42,7 +63,6 @@ const card: UpgradeCardDefinition = {
   description: 'Усиливает Огонь',
   rarity: 'rare',
   weight: 50,
-  maxCount: 5,
   color: '#AA3300',
   effects: [
     { type: 'ability-damage-percent', abilityId: 'fire', value: 20 },
@@ -68,35 +88,103 @@ describe('upgradeLogic', () => {
     });
   });
 
-  it('exposes parameters for effects that are not yet present on the selected ability', () => {
+  it('offers modifiers only for existing ability effects and add actions for missing effects', () => {
     const types = getCompatibleUpgradeEffectTypes(abilities[0]);
 
     expect(types).toContain('ability-damage-percent');
     expect(types).toContain('ability-damage-target-count');
-    expect(types).toContain('ability-damage-critical-multiplier');
     expect(types).toContain('ability-periodic-damage-percent');
     expect(types).toContain('ability-periodic-chance');
-    expect(types).toContain('ability-periodic-critical-multiplier');
-    expect(types).toContain('ability-periodic-target-count');
-    expect(types).toContain('ability-damage-target-type');
-    expect(types).toContain('ability-damage-source');
-    expect(types).toContain('ability-periodic-area-height');
-    expect(types).toContain('ability-periodic-visual-color');
-    expect(types).toContain('ability-slow-percent');
-    expect(types).toContain('ability-heal-percent');
+    expect(types).toContain('ability-add-slow');
+    expect(types).toContain('ability-add-heal');
+
+    expect(types).not.toContain('ability-add-damage');
+    expect(types).not.toContain('ability-add-periodic-damage');
+    expect(types).not.toContain('ability-slow-percent');
+    expect(types).not.toContain('ability-heal-percent');
   });
 
-  it('accepts a card that adds an effect missing from the ability', () => {
+  it('creates every added effect without hidden non-zero numeric defaults', () => {
+    expect(getDefaultUpgradeEffectValue('ability-add-damage', abilities[1])).toEqual({
+      amount: 0,
+      damageSourceId: '',
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+    });
+    expect(getDefaultUpgradeEffectValue('ability-add-periodic-damage', abilities[1])).toEqual({
+      chancePercent: 0,
+      amount: 0,
+      duration: 0,
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      visualColor: '#000000',
+      target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+    });
+    expect(getDefaultUpgradeEffectValue('ability-add-slow', abilities[1])).toEqual({
+      slowPercent: 0,
+      duration: 0,
+      target: { type: 'all-enemies', count: 0, areaHeightPercent: 0 },
+    });
+    expect(getDefaultUpgradeEffectValue('ability-add-heal', abilities[1])).toEqual({
+      amount: 0,
+      target: { type: 'castle', count: 0, areaHeightPercent: 0 },
+    });
+  });
+
+  it('clears target parameters that become hidden after changing the target type', () => {
+    const periodic = getDefaultUpgradeEffectValue('ability-add-periodic-damage', abilities[1]);
+    if (typeof periodic !== 'object') throw new Error('Expected added periodic effect value.');
+
+    const withCount = {
+      ...periodic,
+      target: { ...periodic.target, count: 3, areaHeightPercent: 40 },
+    };
+    const allEnemies = changeAddedTargetType(withCount, 'all-enemies');
+
+    expect(allEnemies.target).toEqual({
+      type: 'all-enemies',
+      count: 0,
+      areaHeightPercent: 0,
+    });
+  });
+
+  it('accepts a card that explicitly adds effects missing from the ability', () => {
     const result = validateUpgradeCard({
       ...card,
       effects: [
-        { type: 'ability-heal-flat', abilityId: 'fire', value: 25 },
-        { type: 'ability-slow-percent', abilityId: 'fire', value: 15 },
+        {
+          type: 'ability-add-heal',
+          abilityId: 'fire',
+          value: {
+            amount: 25,
+            target: { type: 'castle', count: 0, areaHeightPercent: 0 },
+          },
+        },
+        {
+          type: 'ability-add-slow',
+          abilityId: 'fire',
+          value: {
+            slowPercent: 15,
+            duration: 0,
+            target: { type: 'all-enemies', count: 0, areaHeightPercent: 0 },
+          },
+        },
       ],
     }, [], abilities);
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual({});
+  });
+
+  it('does not allow a modifier to create an effect that is missing from the ability', () => {
+    const result = validateUpgradeCard({
+      ...card,
+      effects: [{ type: 'ability-periodic-damage-flat', abilityId: 'bolt', value: 20 }],
+    }, [], abilities);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors['effect.0.type']).toBeTruthy();
   });
 
   it('validates direct effect parameters used by the ability editor', () => {
@@ -128,17 +216,97 @@ describe('upgradeLogic', () => {
     expect(result.errors).toEqual({});
   });
 
-  it('validates maxCount, weight and existing abilities', () => {
+  it('validates weight and existing abilities', () => {
     const result = validateUpgradeCard({
       ...card,
       weight: 0,
-      maxCount: 0,
       effects: [{ type: 'ability-damage-percent', abilityId: 'missing', value: 20 }],
     }, [], abilities);
 
     expect(result.valid).toBe(false);
     expect(result.errors.weight).toBeTruthy();
-    expect(result.errors.maxCount).toBeTruthy();
     expect(result.errors['effect.0.abilityId']).toBeTruthy();
   });
+
+
+  it('does not silently replace a zero critical multiplier when critical chance is enabled', () => {
+    const abilitiesWithoutBoltDamage: AbilityDefinition[] = abilities.map((ability) => (
+      ability.id === 'bolt'
+        ? { ...ability, effects: ability.effects.filter((effect) => effect.type !== 'damage') }
+        : ability
+    ));
+
+    const damageResult = validateUpgradeCard({
+      ...card,
+      effects: [{
+        type: 'ability-add-damage',
+        abilityId: 'bolt',
+        value: {
+          amount: 10,
+          damageSourceId: 'magic',
+          criticalChancePercent: 25,
+          criticalMultiplier: 0,
+          target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
+        },
+      }],
+    }, [], abilitiesWithoutBoltDamage, undefined, [{ id: 'magic', name: 'Магия' }]);
+
+    const periodicResult = validateUpgradeCard({
+      ...card,
+      effects: [{
+        type: 'ability-add-periodic-damage',
+        abilityId: 'bolt',
+        value: {
+          chancePercent: 100,
+          amount: 10,
+          duration: 2,
+          criticalChancePercent: 25,
+          criticalMultiplier: 0,
+          visualColor: '#000000',
+          target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
+        },
+      }],
+    }, [], abilities);
+
+    expect(damageResult.valid).toBe(false);
+    expect(damageResult.errors['effect.0.value']).toBeTruthy();
+    expect(periodicResult.valid).toBe(false);
+    expect(periodicResult.errors['effect.0.value']).toBeTruthy();
+  });
+
+  it('requires an explicit visual color for a newly added periodic effect', () => {
+    const result = validateUpgradeCard({
+      ...card,
+      effects: [{
+        type: 'ability-add-periodic-damage',
+        abilityId: 'bolt',
+        value: {
+          chancePercent: 0,
+          amount: 0,
+          duration: 0,
+          criticalChancePercent: 0,
+          criticalMultiplier: 0,
+          visualColor: '',
+          target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+        },
+      }],
+    }, [], abilities);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors['effect.0.visualColor']).toBeTruthy();
+  });
+  it('ships valid sample cards across every rarity, weight range and available upgrade parameter', () => {
+    expect(new Set(DEFAULT_UPGRADES.map((item) => item.rarity))).toEqual(new Set(['common', 'rare', 'epic', 'legendary']));
+    expect(new Set(DEFAULT_UPGRADES.map((item) => item.weight)).size).toBeGreaterThan(4);
+
+    const compatibleTypes = new Set(DEFAULT_ABILITIES.flatMap((ability) => getCompatibleUpgradeEffectTypes(ability)));
+    const coveredTypes = new Set(DEFAULT_UPGRADES.flatMap((item) => item.effects.map((effect) => effect.type)));
+    expect([...compatibleTypes].filter((type) => !coveredTypes.has(type))).toEqual([]);
+
+    for (const sample of DEFAULT_UPGRADES) {
+      const result = validateUpgradeCard(sample, DEFAULT_UPGRADES, DEFAULT_ABILITIES, sample.id, DEFAULT_DAMAGE_SOURCES);
+      expect(result.errors).toEqual({});
+    }
+  });
+
 });

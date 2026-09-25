@@ -1,17 +1,25 @@
 import { DEFAULT_UPGRADES } from './defaultUpgrades';
 import type {
+  UpgradeAddEffectType,
   UpgradeCardDefinition,
   UpgradeCardImage,
   UpgradeEffect,
   UpgradeEffectType,
+  UpgradeModifierEffectType,
   UpgradeRarity,
 } from './types';
 
 const STORAGE_KEY = 'game.upgrades.v2';
-const CARD_KEYS = new Set(['id', 'name', 'description', 'rarity', 'weight', 'maxCount', 'effects', 'color', 'image']);
+const CARD_KEYS = new Set(['id', 'name', 'description', 'rarity', 'weight', 'effects', 'color', 'image']);
 const EFFECT_KEYS = new Set(['type', 'abilityId', 'value']);
 const IMAGE_KEYS = new Set(['name', 'src']);
-const EFFECT_TYPES = new Set<UpgradeEffectType>([
+const TARGET_KEYS = new Set(['type', 'count', 'areaHeightPercent']);
+const ADD_DAMAGE_KEYS = new Set(['amount', 'damageSourceId', 'criticalChancePercent', 'criticalMultiplier', 'target']);
+const ADD_PERIODIC_KEYS = new Set(['chancePercent', 'amount', 'duration', 'criticalChancePercent', 'criticalMultiplier', 'visualColor', 'target']);
+const ADD_SLOW_KEYS = new Set(['slowPercent', 'duration', 'target']);
+const ADD_HEAL_KEYS = new Set(['amount', 'target']);
+
+const MODIFIER_EFFECT_TYPES = new Set<UpgradeModifierEffectType>([
   'ability-damage-percent',
   'ability-damage-flat',
   'ability-damage-target-type',
@@ -40,7 +48,14 @@ const EFFECT_TYPES = new Set<UpgradeEffectType>([
   'ability-heal-percent',
   'ability-heal-flat',
 ]);
-const STRING_VALUE_TYPES = new Set<UpgradeEffectType>([
+const ADD_EFFECT_TYPES = new Set<UpgradeAddEffectType>([
+  'ability-add-damage',
+  'ability-add-periodic-damage',
+  'ability-add-slow',
+  'ability-add-heal',
+]);
+const EFFECT_TYPES = new Set<UpgradeEffectType>([...MODIFIER_EFFECT_TYPES, ...ADD_EFFECT_TYPES]);
+const STRING_VALUE_TYPES = new Set<UpgradeModifierEffectType>([
   'ability-damage-target-type',
   'ability-damage-source',
   'ability-periodic-target-type',
@@ -62,6 +77,84 @@ function isImage(value: unknown): value is UpgradeCardImage {
   return hasOnlyKeys(image, IMAGE_KEYS) && typeof image.name === 'string' && typeof image.src === 'string';
 }
 
+function isFiniteNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isTarget(value: unknown, allowedTypes: Set<string>): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const target = value as Record<string, unknown>;
+  return (
+    hasOnlyKeys(target, TARGET_KEYS) &&
+    typeof target.type === 'string' && allowedTypes.has(target.type) &&
+    isFiniteNonNegative(target.count) && Number.isInteger(target.count) &&
+    isFiniteNonNegative(target.areaHeightPercent) && target.areaHeightPercent <= 100
+  );
+}
+
+function isAddedEffectValue(type: UpgradeAddEffectType, value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const data = value as Record<string, unknown>;
+
+  if (type === 'ability-add-damage') {
+    return (
+      hasOnlyKeys(data, ADD_DAMAGE_KEYS) &&
+      isFiniteNonNegative(data.amount) &&
+      typeof data.damageSourceId === 'string' &&
+      isFiniteNonNegative(data.criticalChancePercent) && data.criticalChancePercent <= 100 &&
+      isFiniteNonNegative(data.criticalMultiplier) && (data.criticalMultiplier === 0 || data.criticalMultiplier >= 1) &&
+      isTarget(data.target, DAMAGE_TARGET_TYPES)
+    );
+  }
+
+  if (type === 'ability-add-periodic-damage') {
+    return (
+      hasOnlyKeys(data, ADD_PERIODIC_KEYS) &&
+      isFiniteNonNegative(data.chancePercent) && data.chancePercent <= 100 &&
+      isFiniteNonNegative(data.amount) &&
+      isFiniteNonNegative(data.duration) &&
+      isFiniteNonNegative(data.criticalChancePercent) && data.criticalChancePercent <= 100 &&
+      isFiniteNonNegative(data.criticalMultiplier) && (data.criticalMultiplier === 0 || data.criticalMultiplier >= 1) &&
+      typeof data.visualColor === 'string' && HEX_COLOR_PATTERN.test(data.visualColor) &&
+      isTarget(data.target, ENEMY_TARGET_TYPES)
+    );
+  }
+
+  if (type === 'ability-add-slow') {
+    return (
+      hasOnlyKeys(data, ADD_SLOW_KEYS) &&
+      isFiniteNonNegative(data.slowPercent) && data.slowPercent <= 100 &&
+      isFiniteNonNegative(data.duration) &&
+      isTarget(data.target, ENEMY_TARGET_TYPES)
+    );
+  }
+
+  return (
+    hasOnlyKeys(data, ADD_HEAL_KEYS) &&
+    isFiniteNonNegative(data.amount) &&
+    isTarget(data.target, new Set(['castle']))
+  );
+}
+
+function isModifierEffect(type: UpgradeModifierEffectType, value: unknown): boolean {
+  if (STRING_VALUE_TYPES.has(type)) {
+    if (typeof value !== 'string' || value.trim().length === 0) return false;
+    if (type === 'ability-damage-target-type') return DAMAGE_TARGET_TYPES.has(value);
+    if (type === 'ability-periodic-target-type' || type === 'ability-slow-target-type') {
+      return ENEMY_TARGET_TYPES.has(value);
+    }
+    if (type === 'ability-periodic-visual-color') return HEX_COLOR_PATTERN.test(value);
+    return true;
+  }
+
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value !== 0 &&
+    (!type.endsWith('-target-count') || Number.isInteger(value))
+  );
+}
+
 function isEffect(value: unknown): value is UpgradeEffect {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const effect = value as Record<string, unknown>;
@@ -70,22 +163,11 @@ function isEffect(value: unknown): value is UpgradeEffect {
   const type = effect.type as UpgradeEffectType;
   if (!EFFECT_TYPES.has(type) || typeof effect.abilityId !== 'string') return false;
 
-  if (STRING_VALUE_TYPES.has(type)) {
-    if (typeof effect.value !== 'string' || effect.value.trim().length === 0) return false;
-    if (type === 'ability-damage-target-type') return DAMAGE_TARGET_TYPES.has(effect.value);
-    if (type === 'ability-periodic-target-type' || type === 'ability-slow-target-type') {
-      return ENEMY_TARGET_TYPES.has(effect.value);
-    }
-    if (type === 'ability-periodic-visual-color') return HEX_COLOR_PATTERN.test(effect.value);
-    return true;
+  if (ADD_EFFECT_TYPES.has(type as UpgradeAddEffectType)) {
+    return isAddedEffectValue(type as UpgradeAddEffectType, effect.value);
   }
 
-  return (
-    typeof effect.value === 'number' &&
-    Number.isFinite(effect.value) &&
-    effect.value !== 0 &&
-    (!type.endsWith('-target-count') || Number.isInteger(effect.value))
-  );
+  return isModifierEffect(type as UpgradeModifierEffectType, effect.value);
 }
 
 function isCard(value: unknown): value is UpgradeCardDefinition {
@@ -98,7 +180,6 @@ function isCard(value: unknown): value is UpgradeCardDefinition {
     typeof card.description === 'string' &&
     typeof card.rarity === 'string' && RARITIES.has(card.rarity as UpgradeRarity) &&
     typeof card.weight === 'number' && Number.isFinite(card.weight) && card.weight > 0 &&
-    typeof card.maxCount === 'number' && Number.isInteger(card.maxCount) && card.maxCount >= 1 &&
     Array.isArray(card.effects) && card.effects.length > 0 && card.effects.every(isEffect) &&
     (card.color === undefined || typeof card.color === 'string') &&
     (card.image === undefined || isImage(card.image))
@@ -108,7 +189,12 @@ function isCard(value: unknown): value is UpgradeCardDefinition {
 function cloneDefaults(): UpgradeCardDefinition[] {
   return DEFAULT_UPGRADES.map((card) => ({
     ...card,
-    effects: card.effects.map((effect) => ({ ...effect })),
+    effects: card.effects.map((effect) => ({
+      ...effect,
+      value: typeof effect.value === 'object'
+        ? { ...effect.value, target: { ...effect.value.target } }
+        : effect.value,
+    } as UpgradeEffect)),
     image: card.image ? { ...card.image } : undefined,
   }));
 }

@@ -24,7 +24,7 @@ const customMap: MapDefinition = {
     color: '#101827',
     fit: 'cover',
   },
-  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
+  upgradeSettings: { enabled: false, cardCount: 3, maxCardReceives: 5, rewardOnBossKill: false },
   waves: [{
     id: 'wave_a',
     blocks: [{

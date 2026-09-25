@@ -77,8 +77,8 @@ describe('areaEffectLogic', () => {
     expect(advanceAreaEffect(active, 2)).toBe(false);
   });
 
-  it('clamps the AOE height to the supported 1-100 percent range', () => {
-    expect(getAreaTop(200, 0)).toBe(198);
+  it('clamps the AOE height to the supported 0-100 percent range', () => {
+    expect(getAreaTop(200, 0)).toBe(200);
     expect(getAreaTop(200, 50)).toBe(100);
     expect(getAreaTop(200, 150)).toBe(0);
     expect(getTargetsInArea(damageEffect.target, [{ y: 99 }, { y: 100 }], (item) => item.y, 200))

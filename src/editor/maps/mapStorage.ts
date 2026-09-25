@@ -15,7 +15,7 @@ const ACTIVE_MAP_STORAGE_KEY = 'game.maps.active.v2';
 const MAP_KEYS = new Set(['id', 'name', 'background', 'upgradeSettings', 'waves', 'endless']);
 const BACKGROUND_KEYS = new Set(['color', 'fit', 'image']);
 const IMAGE_KEYS = new Set(['name', 'src']);
-const MAP_UPGRADE_SETTINGS_KEYS = new Set(['enabled', 'cardCount', 'rewardOnBossKill']);
+const MAP_UPGRADE_SETTINGS_KEYS = new Set(['enabled', 'cardCount', 'maxCardReceives', 'rewardOnBossKill']);
 const WAVE_KEYS = new Set(['id', 'blocks', 'upgradeReward']);
 const UPGRADE_REWARD_KEYS = new Set(['override', 'enabled', 'cardCount']);
 const BLOCK_KEYS = new Set(['id', 'unitId', 'count', 'spawnEvery', 'startWhen']);
@@ -72,6 +72,7 @@ function isMapUpgradeSettings(value: unknown): value is MapUpgradeSettings {
     hasOnlyKeys(settings, MAP_UPGRADE_SETTINGS_KEYS) &&
     typeof settings.enabled === 'boolean' &&
     typeof settings.cardCount === 'number' && Number.isInteger(settings.cardCount) && settings.cardCount >= 1 &&
+    typeof settings.maxCardReceives === 'number' && Number.isInteger(settings.maxCardReceives) && settings.maxCardReceives >= 1 &&
     typeof settings.rewardOnBossKill === 'boolean'
   );
 }

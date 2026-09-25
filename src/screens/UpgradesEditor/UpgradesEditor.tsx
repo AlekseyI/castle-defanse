@@ -4,6 +4,7 @@ import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import type { AbilityTargetType } from '../../editor/abilities/types';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import {
+  changeAddedTargetType,
   cloneUpgradeCard,
   createEmptyUpgradeCard,
   createEmptyUpgradeEffect,
@@ -16,7 +17,15 @@ import {
   validateUpgradeCard,
 } from '../../editor/upgrades/upgradeLogic';
 import { loadUpgrades, persistUpgrades } from '../../editor/upgrades/upgradeStorage';
-import type { UpgradeCardDefinition, UpgradeEffectType, UpgradeRarity } from '../../editor/upgrades/types';
+import type {
+  UpgradeAddEffectValue,
+  UpgradeAddedTarget,
+  UpgradeCardDefinition,
+  UpgradeEffect,
+  UpgradeEffectType,
+  UpgradeEffectValue,
+  UpgradeRarity,
+} from '../../editor/upgrades/types';
 import styles from './UpgradesEditor.module.css';
 
 type Props = {
@@ -54,6 +63,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 function numberValue(value: string): number {
   return value.trim() === '' ? Number.NaN : Number(value);
+}
+
+function zeroNumberValue(value: string): number {
+  const parsed = value.trim() === '' ? 0 : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 type SignedNumberInputProps = {
@@ -173,13 +187,31 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     setIsCreating(next === null);
   };
 
-  const updateEffect = (index: number, patch: Partial<UpgradeCardDefinition['effects'][number]>) => {
+  const updateEffect = (
+    index: number,
+    patch: { abilityId?: string; type?: UpgradeEffectType; value?: UpgradeEffectValue },
+  ) => {
     setDraft((current) => ({
       ...current,
       effects: current.effects.map((effect, effectIndex) => (
-        effectIndex === index ? { ...effect, ...patch } : effect
+        effectIndex === index ? { ...effect, ...patch } as UpgradeEffect : effect
       )),
     }));
+  };
+
+  const updateAddedValue = (index: number, value: UpgradeAddEffectValue) => {
+    updateEffect(index, { value });
+  };
+
+  const updateAddedTarget = (
+    index: number,
+    value: UpgradeAddEffectValue,
+    patch: Partial<UpgradeAddedTarget>,
+  ) => {
+    updateAddedValue(index, {
+      ...value,
+      target: { ...value.target, ...patch },
+    } as UpgradeAddEffectValue);
   };
 
   const handleAbilityChange = (index: number, abilityId: string) => {
@@ -194,7 +226,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     updateEffect(index, {
       abilityId,
       type: nextType,
-      value: option?.valueKind === 'number' && currentEffect?.type === nextType
+      value: option?.valueKind === 'number' && currentEffect?.type === nextType && typeof currentEffect.value === 'number'
         ? currentEffect.value
         : getDefaultUpgradeEffectValue(nextType, ability),
     });
@@ -206,6 +238,161 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       type,
       value: getDefaultUpgradeEffectValue(type, ability),
     });
+  };
+
+  const renderAddedTargetFields = (
+    index: number,
+    value: UpgradeAddEffectValue,
+    effectType: 'damage' | 'periodic-damage' | 'slow' | 'heal',
+  ) => (
+    <>
+      <label className={styles.field}>
+        <span>Тип цели</span>
+        <select
+          value={value.target.type}
+          onChange={(event) => updateAddedValue(index, changeAddedTargetType(value, event.target.value as AbilityTargetType))}
+        >
+          {getAllowedTargets(effectType).map((target) => (
+            <option key={target} value={target}>{TARGET_LABELS[target]}</option>
+          ))}
+        </select>
+      </label>
+
+      {(value.target.type === 'nearest-enemies' || value.target.type === 'random-enemies') && (
+        <label className={styles.field}>
+          <span>Количество целей</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={value.target.count}
+            onChange={(event) => updateAddedTarget(index, value, { count: zeroNumberValue(event.target.value) })}
+          />
+        </label>
+      )}
+
+      {value.target.type === 'area-enemies' && (
+        <label className={styles.field}>
+          <span>Высота области, %</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={value.target.areaHeightPercent}
+            onChange={(event) => updateAddedTarget(index, value, { areaHeightPercent: zeroNumberValue(event.target.value) })}
+          />
+        </label>
+      )}
+    </>
+  );
+
+  const renderAddedEffectFields = (effect: UpgradeEffect, index: number) => {
+    if (effect.type === 'ability-add-damage') {
+      const value = effect.value;
+      return (
+        <>
+          {renderAddedTargetFields(index, value, 'damage')}
+          <label className={styles.field}>
+            <span>Урон</span>
+            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Источник урона</span>
+            <select value={value.damageSourceId} onChange={(event) => updateAddedValue(index, { ...value, damageSourceId: event.target.value })}>
+              <option value="">—</option>
+              {damageSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>Шанс крит. урона, %</span>
+            <input type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Множитель крит. урона</span>
+            <input type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
+          </label>
+        </>
+      );
+    }
+
+    if (effect.type === 'ability-add-periodic-damage') {
+      const value = effect.value;
+      const pickerColor = HEX_COLOR_PATTERN.test(value.visualColor) ? value.visualColor : '#000000';
+      return (
+        <>
+          {renderAddedTargetFields(index, value, 'periodic-damage')}
+          <label className={styles.field}>
+            <span>Шанс, %</span>
+            <input type="number" min="0" max="100" step="0.1" value={value.chancePercent} onChange={(event) => updateAddedValue(index, { ...value, chancePercent: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Урон</span>
+            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Длительность, сек.</span>
+            <input type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Шанс крит. урона, %</span>
+            <input type="number" min="0" max="100" step="0.1" value={value.criticalChancePercent} onChange={(event) => updateAddedValue(index, { ...value, criticalChancePercent: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Множитель крит. урона</span>
+            <input type="number" min="0" step="0.1" value={value.criticalMultiplier} onChange={(event) => updateAddedValue(index, { ...value, criticalMultiplier: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Цвет визуального эффекта</span>
+            <div className={styles.colorRow}>
+              <input className={styles.colorPicker} type="color" value={pickerColor} onChange={(event) => updateAddedValue(index, { ...value, visualColor: event.target.value })} />
+              <input
+                value={value.visualColor}
+                aria-invalid={Boolean(validation.errors[`effect.${index}.visualColor`])}
+                placeholder="#000000"
+                spellCheck={false}
+                onChange={(event) => updateAddedValue(index, { ...value, visualColor: event.target.value })}
+              />
+            </div>
+            {validation.errors[`effect.${index}.visualColor`] && (
+              <small className={styles.fieldError}>{validation.errors[`effect.${index}.visualColor`]}</small>
+            )}
+          </label>
+        </>
+      );
+    }
+
+    if (effect.type === 'ability-add-slow') {
+      const value = effect.value;
+      return (
+        <>
+          {renderAddedTargetFields(index, value, 'slow')}
+          <label className={styles.field}>
+            <span>Замедление, %</span>
+            <input type="number" min="0" max="100" step="0.1" value={value.slowPercent} onChange={(event) => updateAddedValue(index, { ...value, slowPercent: zeroNumberValue(event.target.value) })} />
+          </label>
+          <label className={styles.field}>
+            <span>Длительность, сек.</span>
+            <input type="number" min="0" step="0.1" value={value.duration} onChange={(event) => updateAddedValue(index, { ...value, duration: zeroNumberValue(event.target.value) })} />
+          </label>
+        </>
+      );
+    }
+
+    if (effect.type === 'ability-add-heal') {
+      const value = effect.value;
+      return (
+        <>
+          {renderAddedTargetFields(index, value, 'heal')}
+          <label className={styles.field}>
+            <span>Лечение</span>
+            <input type="number" min="0" value={value.amount} onChange={(event) => updateAddedValue(index, { ...value, amount: zeroNumberValue(event.target.value) })} />
+          </label>
+        </>
+      );
+    }
+
+    return null;
   };
 
   const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -267,7 +454,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
               <div className={styles.previewText}>
                 <span className={styles.kicker}>Карточка улучшения</span>
                 <h1>{isCreating ? 'Новая карточка' : draft.name || 'Без названия'}</h1>
-                <p>{RARITY_LABELS[draft.rarity]} · Эффектов: {draft.effects.length} · Максимум получений: {Number.isFinite(draft.maxCount) ? draft.maxCount : '—'}</p>
+                <p>{RARITY_LABELS[draft.rarity]} · Эффектов: {draft.effects.length}</p>
               </div>
             </div>
 
@@ -337,19 +524,6 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
               </label>
 
               <label className={styles.field}>
-                <span>Максимальное количество получений</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={Number.isFinite(draft.maxCount) ? draft.maxCount : ''}
-                  aria-invalid={Boolean(validation.errors.maxCount)}
-                  onChange={(event) => setDraft((current) => ({ ...current, maxCount: numberValue(event.target.value) }))}
-                />
-                {validation.errors.maxCount && <small className={styles.fieldError}>{validation.errors.maxCount}</small>}
-              </label>
-
-              <label className={styles.field}>
                 <span>Цвет</span>
                 <div className={styles.colorRow}>
                   <input
@@ -384,7 +558,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <div className={styles.effectsHeader}>
               <div>
                 <h2>Эффекты</h2>
-                <p>Можно улучшать уже существующий эффект способности или добавить новый. Если эффекта у способности нет, он появится при получении карточки.</p>
+                <p>Для существующего эффекта доступны его параметры улучшения. Если эффекта у способности нет, выберите «Добавить …» и задайте параметры нового эффекта явно.</p>
               </div>
               <button
                 className={styles.primaryButton}
@@ -431,74 +605,85 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                       {validation.errors[`effect.${index}.type`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.type`]}</small>}
                     </label>
 
-                    <label className={styles.field}>
-                      <span>Значение</span>
-                      {(() => {
-                        const option = getUpgradeEffectOption(effect.type);
-                        const valueError = Boolean(validation.errors[`effect.${index}.value`]);
+                    {getUpgradeEffectOption(effect.type)?.valueKind === 'add-effect' ? (
+                      <div className={`${styles.formGrid} ${styles.fullRow}`}>
+                        {renderAddedEffectFields(effect, index)}
+                        {validation.errors[`effect.${index}.value`] && (
+                          <small className={`${styles.fieldError} ${styles.fullRow}`}>
+                            {validation.errors[`effect.${index}.value`]}
+                          </small>
+                        )}
+                      </div>
+                    ) : (
+                      <label className={styles.field}>
+                        <span>Значение</span>
+                        {(() => {
+                          const option = getUpgradeEffectOption(effect.type);
+                          const valueError = Boolean(validation.errors[`effect.${index}.value`]);
 
-                        if (option?.valueKind === 'target-type') {
-                          return (
-                            <select
-                              value={typeof effect.value === 'string' ? effect.value : ''}
-                              aria-invalid={valueError}
-                              onChange={(event) => updateEffect(index, { value: event.target.value })}
-                            >
-                              {getAllowedTargets(option.abilityEffectType).map((target) => (
-                                <option key={target} value={target}>{TARGET_LABELS[target]}</option>
-                              ))}
-                            </select>
-                          );
-                        }
-
-                        if (option?.valueKind === 'damage-source') {
-                          return (
-                            <select
-                              value={typeof effect.value === 'string' ? effect.value : ''}
-                              aria-invalid={valueError}
-                              onChange={(event) => updateEffect(index, { value: event.target.value })}
-                            >
-                              <option value="">—</option>
-                              {damageSources.map((source) => (
-                                <option key={source.id} value={source.id}>{source.name}</option>
-                              ))}
-                            </select>
-                          );
-                        }
-
-                        if (option?.valueKind === 'color') {
-                          const color = typeof effect.value === 'string' && HEX_COLOR_PATTERN.test(effect.value)
-                            ? effect.value
-                            : '#64748b';
-                          return (
-                            <div className={styles.colorRow}>
-                              <input
-                                className={styles.colorPicker}
-                                type="color"
-                                value={color}
-                                onChange={(event) => updateEffect(index, { value: event.target.value })}
-                              />
-                              <input
+                          if (option?.valueKind === 'target-type') {
+                            return (
+                              <select
                                 value={typeof effect.value === 'string' ? effect.value : ''}
                                 aria-invalid={valueError}
-                                placeholder="#64748b"
-                                spellCheck={false}
                                 onChange={(event) => updateEffect(index, { value: event.target.value })}
-                              />
-                            </div>
-                          );
-                        }
+                              >
+                                {getAllowedTargets(option.abilityEffectType).map((target) => (
+                                  <option key={target} value={target}>{TARGET_LABELS[target]}</option>
+                                ))}
+                              </select>
+                            );
+                          }
 
-                        return (
-                          <SignedNumberInput
-                            value={effect.value}
-                            invalid={valueError}
-                            onCommit={(value) => updateEffect(index, { value })}
-                          />
-                        );
-                      })()}
-                      {validation.errors[`effect.${index}.value`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.value`]}</small>}
-                    </label>
+                          if (option?.valueKind === 'damage-source') {
+                            return (
+                              <select
+                                value={typeof effect.value === 'string' ? effect.value : ''}
+                                aria-invalid={valueError}
+                                onChange={(event) => updateEffect(index, { value: event.target.value })}
+                              >
+                                <option value="">—</option>
+                                {damageSources.map((source) => (
+                                  <option key={source.id} value={source.id}>{source.name}</option>
+                                ))}
+                              </select>
+                            );
+                          }
+
+                          if (option?.valueKind === 'color') {
+                            const color = typeof effect.value === 'string' && HEX_COLOR_PATTERN.test(effect.value)
+                              ? effect.value
+                              : '#64748b';
+                            return (
+                              <div className={styles.colorRow}>
+                                <input
+                                  className={styles.colorPicker}
+                                  type="color"
+                                  value={color}
+                                  onChange={(event) => updateEffect(index, { value: event.target.value })}
+                                />
+                                <input
+                                  value={typeof effect.value === 'string' ? effect.value : ''}
+                                  aria-invalid={valueError}
+                                  placeholder="#64748b"
+                                  spellCheck={false}
+                                  onChange={(event) => updateEffect(index, { value: event.target.value })}
+                                />
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <SignedNumberInput
+                              value={effect.value}
+                              invalid={valueError}
+                              onCommit={(value) => updateEffect(index, { value })}
+                            />
+                          );
+                        })()}
+                        {validation.errors[`effect.${index}.value`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.value`]}</small>}
+                      </label>
+                    )}
 
                     <button
                       className={styles.removeButton}

@@ -11,6 +11,7 @@ export const DEFAULT_MAPS: MapDefinition[] = [
     upgradeSettings: {
       enabled: false,
       cardCount: 3,
+      maxCardReceives: 5,
       rewardOnBossKill: false,
     },
     waves: [

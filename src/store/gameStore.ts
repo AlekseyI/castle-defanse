@@ -21,6 +21,7 @@ interface GameState {
   autoCastMatches: boolean;
   boardBusy: boolean;
   upgradeCounts: Record<string, number>;
+  upgradeMaxCardReceives: number;
   upgradeChoices: UpgradeCardDefinition[];
   abilityModifiers: AbilityRuntimeModifiers;
   addCharge: (kind: TileKind, amount: number) => void;
@@ -35,7 +36,7 @@ interface GameState {
   setBoardBusy: (busy: boolean) => void;
   openUpgradeSelection: (choices: UpgradeCardDefinition[]) => void;
   selectUpgrade: (cardId: string) => boolean;
-  reset: (totalWaves: number, abilityIds?: TileKind[]) => void;
+  reset: (totalWaves: number, abilityIds?: TileKind[], maxCardReceives?: number) => void;
 }
 
 const emptyCharges = (abilityIds: TileKind[] = []): SpellCharges => Object.fromEntries(
@@ -54,6 +55,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   autoCastMatches: true,
   boardBusy: false,
   upgradeCounts: {},
+  upgradeMaxCardReceives: 1,
   upgradeChoices: [],
   abilityModifiers: {},
 
@@ -119,7 +121,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (!card) return false;
 
     const currentCount = state.upgradeCounts[card.id] ?? 0;
-    if (currentCount >= card.maxCount) return false;
+    if (currentCount >= state.upgradeMaxCardReceives) return false;
 
     const abilityModifiers: AbilityRuntimeModifiers = structuredClone(state.abilityModifiers);
     for (const effect of card.effects) addUpgradeEffectToModifiers(abilityModifiers, effect);
@@ -136,7 +138,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  reset: (totalWaves, abilityIds = []) =>
+  reset: (totalWaves, abilityIds = [], maxCardReceives = 1) =>
     set({
       castleHp: 100,
       castleMaxHp: 100,
@@ -147,6 +149,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       phase: 'playing',
       boardBusy: false,
       upgradeCounts: {},
+      upgradeMaxCardReceives: Math.max(1, Math.floor(maxCardReceives)),
       upgradeChoices: [],
       abilityModifiers: {},
     }),

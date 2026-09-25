@@ -15,7 +15,7 @@ const map: MapDefinition = {
     color: '#0b1020',
     fit: 'cover',
   },
-  upgradeSettings: { enabled: false, cardCount: 3, rewardOnBossKill: false },
+  upgradeSettings: { enabled: false, cardCount: 3, maxCardReceives: 5, rewardOnBossKill: false },
   waves: [
     {
       id: 'wave_1',

@@ -39,7 +39,6 @@ const card: UpgradeCardDefinition = {
   description: '',
   rarity: 'rare',
   weight: 100,
-  maxCount: 5,
   effects: [
     { type: 'ability-damage-percent', abilityId: 'fire', value: 20 },
     { type: 'ability-periodic-damage-percent', abilityId: 'fire', value: 15 },
@@ -49,7 +48,7 @@ const card: UpgradeCardDefinition = {
 };
 
 describe('upgradeCalculator', () => {
-  it('applies every effect in a card for every selected copy without mutating base ability', () => {
+  it('applies every modifier in a card for every selected copy without mutating base ability', () => {
     const modifiers = buildAbilityRuntimeModifiers([card], { hellfire: 2 });
     const upgraded = applyAbilityRuntimeModifier(ability, modifiers.fire);
     const damage = upgraded.effects[0];
@@ -72,37 +71,7 @@ describe('upgradeCalculator', () => {
     expect(ability.effects[1]).toMatchObject({ amount: 10, duration: 4 });
   });
 
-  it('applies negative modifiers as penalties while keeping runtime values in valid ranges', () => {
-    const cursedCard: UpgradeCardDefinition = {
-      ...card,
-      id: 'cursed_power',
-      effects: [
-        { type: 'ability-damage-percent', abilityId: 'fire', value: -50 },
-        { type: 'ability-damage-target-count', abilityId: 'fire', value: -1 },
-        { type: 'ability-damage-critical-chance', abilityId: 'fire', value: -10 },
-        { type: 'ability-periodic-duration-percent', abilityId: 'fire', value: -50 },
-        { type: 'ability-periodic-damage-flat', abilityId: 'fire', value: -20 },
-      ],
-    };
-
-    const modifiers = buildAbilityRuntimeModifiers([cursedCard], { cursed_power: 1 });
-    const upgraded = applyAbilityRuntimeModifier(ability, modifiers.fire);
-    const damage = upgraded.effects.find((effect) => effect.type === 'damage');
-    const periodic = upgraded.effects.find((effect) => effect.type === 'periodic-damage');
-
-    if (damage?.type === 'damage') {
-      expect(damage.amount).toBe(25);
-      expect(damage.target).toEqual({ type: 'random-enemies', count: 1 });
-      expect(damage.criticalChancePercent).toBe(0);
-    }
-
-    if (periodic?.type === 'periodic-damage') {
-      expect(periodic.amount).toBe(0);
-      expect(periodic.duration).toBe(2);
-    }
-  });
-
-  it('adds a missing periodic damage effect using values from the upgrade card', () => {
+  it('adds a periodic effect with exactly the parameters stored in the card', () => {
     const damageOnlyAbility: AbilityDefinition = {
       ...ability,
       effects: [ability.effects[0]],
@@ -110,100 +79,169 @@ describe('upgradeCalculator', () => {
     const addPeriodicCard: UpgradeCardDefinition = {
       ...card,
       id: 'ignite',
-      effects: [
-        { type: 'ability-periodic-damage-flat', abilityId: 'fire', value: 12 },
-        { type: 'ability-periodic-duration-flat', abilityId: 'fire', value: 3 },
-        { type: 'ability-periodic-chance', abilityId: 'fire', value: 40 },
-        { type: 'ability-periodic-critical-chance', abilityId: 'fire', value: 10 },
-        { type: 'ability-periodic-critical-multiplier', abilityId: 'fire', value: 0.5 },
-        { type: 'ability-periodic-target-type', abilityId: 'fire', value: 'area-enemies' },
-        { type: 'ability-periodic-area-height', abilityId: 'fire', value: 20 },
-        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
-      ],
+      effects: [{
+        type: 'ability-add-periodic-damage',
+        abilityId: 'fire',
+        value: {
+          chancePercent: 40,
+          amount: 12,
+          duration: 3,
+          criticalChancePercent: 10,
+          criticalMultiplier: 2,
+          visualColor: '#00ff00',
+          target: { type: 'area-enemies', count: 0, areaHeightPercent: 70 },
+        },
+      }],
     };
 
     const modifiers = buildAbilityRuntimeModifiers([addPeriodicCard], { ignite: 1 });
     const upgraded = applyAbilityRuntimeModifier(damageOnlyAbility, modifiers.fire);
     const periodic = upgraded.effects.find((effect) => effect.type === 'periodic-damage');
 
-    expect(periodic).toBeTruthy();
-    if (periodic?.type === 'periodic-damage') {
-      expect(periodic.amount).toBe(12);
-      expect(periodic.duration).toBe(3);
-      expect(periodic.chancePercent).toBe(40);
-      expect(periodic.criticalChancePercent).toBe(10);
-      expect(periodic.criticalMultiplier).toBe(2);
-      expect(periodic.visualColor).toBe('#00ff00');
-      expect(periodic.target).toEqual({ type: 'area-enemies', areaHeightPercent: 70 });
-    }
-
+    expect(periodic).toEqual({
+      type: 'periodic-damage',
+      chancePercent: 40,
+      amount: 12,
+      duration: 3,
+      criticalChancePercent: 10,
+      criticalMultiplier: 2,
+      visualColor: '#00ff00',
+      target: { type: 'area-enemies', areaHeightPercent: 70 },
+    });
     expect(damageOnlyAbility.effects).toHaveLength(1);
   });
 
-  it('applies the direct ability parameters exposed by upgrade cards', () => {
-    const directCard: UpgradeCardDefinition = {
-      ...card,
-      id: 'direct_parameters',
+  it('keeps explicit zero values when a new effect is added', () => {
+    const base: AbilityDefinition = {
+      id: 'bolt',
+      name: 'Разряд',
+      visualEffect: 'lightning',
+      color: '#00aaff',
+      effects: [],
+    };
+    const zeroCard: UpgradeCardDefinition = {
+      id: 'zero_periodic',
+      name: 'Пустой периодический эффект',
+      description: '',
+      rarity: 'common',
+      weight: 1,
+      effects: [{
+        type: 'ability-add-periodic-damage',
+        abilityId: 'bolt',
+        value: {
+          chancePercent: 0,
+          amount: 0,
+          duration: 0,
+          criticalChancePercent: 0,
+          criticalMultiplier: 0,
+          visualColor: '#000000',
+          target: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+        },
+      }],
+    };
+
+    const modifiers = buildAbilityRuntimeModifiers([zeroCard], { zero_periodic: 1 });
+    const upgraded = applyAbilityRuntimeModifier(base, modifiers.bolt);
+
+    expect(upgraded.effects).toEqual([{
+      type: 'periodic-damage',
+      chancePercent: 0,
+      amount: 0,
+      duration: 0,
+      criticalChancePercent: 0,
+      criticalMultiplier: 0,
+      visualColor: '#000000',
+      target: { type: 'nearest-enemies', count: 0 },
+    }]);
+  });
+
+  it('adds damage, slow and heal effects from add-effect cards', () => {
+    const base: AbilityDefinition = {
+      id: 'utility',
+      name: 'Утилита',
+      visualEffect: 'none',
+      color: '#ffffff',
+      effects: [],
+    };
+    const addEffectsCard: UpgradeCardDefinition = {
+      id: 'all_added',
+      name: 'Новые эффекты',
+      description: '',
+      rarity: 'legendary',
+      weight: 1,
       effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: 'area-enemies' },
-        { type: 'ability-damage-area-height', abilityId: 'fire', value: 20 },
-        { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
-        { type: 'ability-damage-critical-multiplier', abilityId: 'fire', value: 0.5 },
-        { type: 'ability-periodic-target-type', abilityId: 'fire', value: 'random-enemies' },
-        { type: 'ability-periodic-target-count', abilityId: 'fire', value: 1 },
-        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
+        {
+          type: 'ability-add-damage',
+          abilityId: 'utility',
+          value: {
+            amount: 25,
+            damageSourceId: 'magic',
+            criticalChancePercent: 20,
+            criticalMultiplier: 2.5,
+            target: { type: 'random-enemies', count: 4, areaHeightPercent: 0 },
+          },
+        },
+        {
+          type: 'ability-add-slow',
+          abilityId: 'utility',
+          value: {
+            slowPercent: 35,
+            duration: 2.5,
+            target: { type: 'all-enemies', count: 0, areaHeightPercent: 0 },
+          },
+        },
+        {
+          type: 'ability-add-heal',
+          abilityId: 'utility',
+          value: {
+            amount: 18,
+            target: { type: 'castle', count: 0, areaHeightPercent: 0 },
+          },
+        },
       ],
     };
 
-    const modifiers = buildAbilityRuntimeModifiers([directCard], { direct_parameters: 1 });
-    const upgraded = applyAbilityRuntimeModifier(ability, modifiers.fire);
-    const damage = upgraded.effects.find((effect) => effect.type === 'damage');
-    const periodic = upgraded.effects.find((effect) => effect.type === 'periodic-damage');
+    const modifiers = buildAbilityRuntimeModifiers([addEffectsCard], { all_added: 1 });
+    const upgraded = applyAbilityRuntimeModifier(base, modifiers.utility);
 
-    if (damage?.type === 'damage') {
-      expect(damage.target).toEqual({ type: 'area-enemies', areaHeightPercent: 70 });
-      expect(damage.damageSourceId).toBe('magic');
-      expect(damage.criticalMultiplier).toBe(2);
-    }
-
-    if (periodic?.type === 'periodic-damage') {
-      expect(periodic.target).toEqual({ type: 'random-enemies', count: 2 });
-      expect(periodic.visualColor).toBe('#00ff00');
-    }
+    expect(upgraded.effects).toEqual([
+      {
+        type: 'damage',
+        amount: 25,
+        damageSourceId: 'magic',
+        criticalChancePercent: 20,
+        criticalMultiplier: 2.5,
+        target: { type: 'random-enemies', count: 4 },
+      },
+      {
+        type: 'slow',
+        slowPercent: 35,
+        duration: 2.5,
+        target: { type: 'all-enemies' },
+      },
+      {
+        type: 'heal',
+        amount: 18,
+        target: { type: 'castle' },
+      },
+    ]);
   });
 
-  it('adds missing slow and heal effects with card values', () => {
+  it('does not create a missing effect from a regular modifier', () => {
     const damageOnlyAbility: AbilityDefinition = {
       ...ability,
       effects: [ability.effects[0]],
     };
-    const addEffectsCard: UpgradeCardDefinition = {
+    const invalidRuntimeCard: UpgradeCardDefinition = {
       ...card,
-      id: 'control_and_heal',
-      effects: [
-        { type: 'ability-slow-percent', abilityId: 'fire', value: 25 },
-        { type: 'ability-slow-duration-flat', abilityId: 'fire', value: 2 },
-        { type: 'ability-heal-flat', abilityId: 'fire', value: 15 },
-      ],
+      id: 'periodic_modifier_without_add',
+      effects: [{ type: 'ability-periodic-damage-flat', abilityId: 'fire', value: 20 }],
     };
 
-    const modifiers = buildAbilityRuntimeModifiers([addEffectsCard], { control_and_heal: 1 });
+    const modifiers = buildAbilityRuntimeModifiers([invalidRuntimeCard], { periodic_modifier_without_add: 1 });
     const upgraded = applyAbilityRuntimeModifier(damageOnlyAbility, modifiers.fire);
-    const slow = upgraded.effects.find((effect) => effect.type === 'slow');
-    const heal = upgraded.effects.find((effect) => effect.type === 'heal');
 
-    expect(slow).toBeTruthy();
-    if (slow?.type === 'slow') {
-      expect(slow.slowPercent).toBe(25);
-      expect(slow.duration).toBe(2);
-      expect(slow.target).toEqual({ type: 'all-enemies' });
-    }
-
-    expect(heal).toBeTruthy();
-    if (heal?.type === 'heal') {
-      expect(heal.amount).toBe(15);
-      expect(heal.target).toEqual({ type: 'castle' });
-    }
+    expect(upgraded.effects).toHaveLength(1);
+    expect(upgraded.effects[0].type).toBe('damage');
   });
-
 });

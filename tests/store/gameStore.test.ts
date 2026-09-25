@@ -125,13 +125,13 @@ describe('gameStore upgrades', () => {
   });
 
   it('opens upgrade selection and applies all effects of the chosen card', () => {
+    useGameStore.getState().reset(3, ['fire'], 2);
     const card = {
       id: 'hellfire',
       name: 'Адское пламя',
       description: '',
       rarity: 'rare' as const,
       weight: 100,
-      maxCount: 2,
       effects: [
         { type: 'ability-damage-percent' as const, abilityId: 'fire', value: 20 },
         { type: 'ability-periodic-damage-percent' as const, abilityId: 'fire', value: 15 },
@@ -150,14 +150,51 @@ describe('gameStore upgrades', () => {
     expect(state.abilityModifiers.fire.periodicDamage.amountPercent).toBe(15);
   });
 
-  it('does not allow selecting a card outside the current choices or beyond maxCount', () => {
+  it('stores a newly added ability effect when the player selects an add-effect card', () => {
+    useGameStore.getState().reset(3, ['fire'], 2);
+    const card = {
+      id: 'ignite',
+      name: 'Горение',
+      description: '',
+      rarity: 'rare' as const,
+      weight: 50,
+      effects: [{
+        type: 'ability-add-periodic-damage' as const,
+        abilityId: 'fire',
+        value: {
+          chancePercent: 40,
+          amount: 12,
+          duration: 3,
+          criticalChancePercent: 10,
+          criticalMultiplier: 2,
+          visualColor: '#ff0000',
+          target: { type: 'nearest-enemies' as const, count: 2, areaHeightPercent: 0 },
+        },
+      }],
+    };
+
+    useGameStore.getState().openUpgradeSelection([card]);
+    expect(useGameStore.getState().selectUpgrade(card.id)).toBe(true);
+    expect(useGameStore.getState().abilityModifiers.fire.addedEffects).toEqual([{
+      type: 'periodic-damage',
+      chancePercent: 40,
+      amount: 12,
+      duration: 3,
+      criticalChancePercent: 10,
+      criticalMultiplier: 2,
+      visualColor: '#ff0000',
+      target: { type: 'nearest-enemies', count: 2 },
+    }]);
+  });
+
+  it('does not allow selecting a card outside the current choices or beyond the map receive limit', () => {
+    useGameStore.getState().reset(3, ['fire'], 1);
     const card = {
       id: 'single',
       name: 'Один раз',
       description: '',
       rarity: 'common' as const,
       weight: 100,
-      maxCount: 1,
       effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
     };
 
@@ -184,7 +221,6 @@ describe('gameStore upgrades', () => {
       description: '',
       rarity: 'common' as const,
       weight: 100,
-      maxCount: 3,
       effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
     };
 

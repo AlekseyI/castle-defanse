@@ -197,6 +197,7 @@ export function createEmptyMap(unitId = ''): MapDefinition {
     upgradeSettings: {
       enabled: false,
       cardCount: 3,
+      maxCardReceives: 5,
       rewardOnBossKill: false,
     },
     waves: [createEmptyWave(unitId)],
@@ -282,6 +283,9 @@ export function validateMap(
 
   if (!Number.isInteger(normalized.upgradeSettings.cardCount) || normalized.upgradeSettings.cardCount < 1) {
     errors.upgradeCardCount = 'Количество карточек должно быть целым числом от 1.';
+  }
+  if (!Number.isInteger(normalized.upgradeSettings.maxCardReceives) || normalized.upgradeSettings.maxCardReceives < 1) {
+    errors.upgradeMaxCardReceives = 'Максимальное количество получений должно быть целым числом от 1.';
   }
 
   normalized.waves.forEach((wave, waveIndex) => {

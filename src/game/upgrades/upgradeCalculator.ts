@@ -6,7 +6,6 @@ import type {
 } from '../../editor/abilities/types';
 import type { UpgradeCardDefinition, UpgradeEffect } from '../../editor/upgrades/types';
 
-const DEFAULT_CRITICAL_MULTIPLIER = 1.5;
 const DEFAULT_AOE_HEIGHT_PERCENT = 50;
 
 export interface EffectRuntimeModifier {
@@ -27,6 +26,7 @@ export interface EffectRuntimeModifier {
 }
 
 export interface AbilityRuntimeModifier {
+  addedEffects: AbilityEffect[];
   damage: EffectRuntimeModifier;
   periodicDamage: EffectRuntimeModifier;
   slow: EffectRuntimeModifier;
@@ -53,6 +53,7 @@ function emptyEffectModifier(): EffectRuntimeModifier {
 
 export function createEmptyAbilityRuntimeModifier(): AbilityRuntimeModifier {
   return {
+    addedEffects: [],
     damage: emptyEffectModifier(),
     periodicDamage: emptyEffectModifier(),
     slow: emptyEffectModifier(),
@@ -73,6 +74,61 @@ function activate(modifier: EffectRuntimeModifier): EffectRuntimeModifier {
   return modifier;
 }
 
+function addedTargetToAbilityTarget(target: {
+  type: AbilityTargetType;
+  count: number;
+  areaHeightPercent: number;
+}): AbilityTarget {
+  if (target.type === 'nearest-enemies' || target.type === 'random-enemies') {
+    return { type: target.type, count: target.count };
+  }
+  if (target.type === 'area-enemies') {
+    return { type: target.type, areaHeightPercent: target.areaHeightPercent };
+  }
+  return { type: target.type };
+}
+
+function createAddedAbilityEffect(effect: UpgradeEffect): AbilityEffect | undefined {
+  if (effect.type === 'ability-add-damage') {
+    return {
+      type: 'damage',
+      amount: effect.value.amount,
+      damageSourceId: effect.value.damageSourceId,
+      criticalChancePercent: effect.value.criticalChancePercent,
+      criticalMultiplier: effect.value.criticalMultiplier,
+      target: addedTargetToAbilityTarget(effect.value.target),
+    };
+  }
+  if (effect.type === 'ability-add-periodic-damage') {
+    return {
+      type: 'periodic-damage',
+      chancePercent: effect.value.chancePercent,
+      amount: effect.value.amount,
+      duration: effect.value.duration,
+      criticalChancePercent: effect.value.criticalChancePercent,
+      criticalMultiplier: effect.value.criticalMultiplier,
+      visualColor: effect.value.visualColor,
+      target: addedTargetToAbilityTarget(effect.value.target),
+    };
+  }
+  if (effect.type === 'ability-add-slow') {
+    return {
+      type: 'slow',
+      slowPercent: effect.value.slowPercent,
+      duration: effect.value.duration,
+      target: addedTargetToAbilityTarget(effect.value.target),
+    };
+  }
+  if (effect.type === 'ability-add-heal') {
+    return {
+      type: 'heal',
+      amount: effect.value.amount,
+      target: addedTargetToAbilityTarget(effect.value.target),
+    };
+  }
+  return undefined;
+}
+
 function numericUpgradeValue(effect: UpgradeEffect, multiplier: number): number {
   return typeof effect.value === 'number' ? effect.value * multiplier : 0;
 }
@@ -83,6 +139,18 @@ export function addUpgradeEffectToModifiers(
   multiplier = 1,
 ): void {
   const ability = ensureAbilityModifier(modifiers, effect.abilityId);
+  const addedEffect = createAddedAbilityEffect(effect);
+  if (addedEffect) {
+    const copies = Math.max(0, Math.floor(multiplier));
+    for (let index = 0; index < copies; index += 1) {
+      ability.addedEffects.push({
+        ...addedEffect,
+        target: { ...addedEffect.target },
+      } as AbilityEffect);
+    }
+    return;
+  }
+
   const value = numericUpgradeValue(effect, multiplier);
 
   switch (effect.type) {
@@ -193,6 +261,11 @@ function applyDuration(base: number, modifier: EffectRuntimeModifier): number {
   return Math.max(0, base * (1 + modifier.durationPercent / 100) + modifier.durationFlat);
 }
 
+function applyCriticalMultiplier(base: number, bonus: number): number {
+  if (base === 0 && bonus === 0) return 0;
+  return Math.max(1, base + bonus);
+}
+
 function resolveTargetType(target: AbilityTarget, modifier: EffectRuntimeModifier): AbilityTargetType {
   if (modifier.targetType) return modifier.targetType;
   if (modifier.areaHeightPercentBonus > 0) return 'area-enemies';
@@ -209,7 +282,7 @@ function applyTarget(target: AbilityTarget, modifier: EffectRuntimeModifier): Ab
     const baseCount = target.type === type ? (target.count ?? 1) : 1;
     return {
       type,
-      count: Math.max(1, Math.floor(baseCount + modifier.targetCountBonus)),
+      count: Math.max(0, Math.floor(baseCount + modifier.targetCountBonus)),
     };
   }
 
@@ -219,67 +292,11 @@ function applyTarget(target: AbilityTarget, modifier: EffectRuntimeModifier): Ab
       : DEFAULT_AOE_HEIGHT_PERCENT;
     return {
       type,
-      areaHeightPercent: Math.min(100, Math.max(1, baseHeight + modifier.areaHeightPercentBonus)),
+      areaHeightPercent: Math.min(100, Math.max(0, baseHeight + modifier.areaHeightPercentBonus)),
     };
   }
 
   return { type };
-}
-
-function createMissingTarget(
-  defaultTarget: AbilityTarget,
-  modifier: EffectRuntimeModifier,
-): AbilityTarget {
-  return applyTarget(defaultTarget, modifier);
-}
-
-function createMissingEffect(
-  ability: AbilityDefinition,
-  type: AbilityEffect['type'],
-  modifier: EffectRuntimeModifier,
-): AbilityEffect {
-  if (type === 'damage') {
-    return {
-      type,
-      amount: applyAmount(0, modifier),
-      damageSourceId: modifier.damageSourceId ?? ability.id,
-      criticalChancePercent: Math.min(100, Math.max(0, modifier.criticalChanceBonus)),
-      criticalMultiplier: Math.max(1, DEFAULT_CRITICAL_MULTIPLIER + modifier.criticalMultiplierBonus),
-      target: createMissingTarget({ type: 'nearest-enemies', count: 1 }, modifier),
-    };
-  }
-
-  if (type === 'periodic-damage') {
-    const baseDuration = modifier.durationFlat > 0 ? 0 : 1;
-    return {
-      type,
-      chancePercent: modifier.chancePercentBonus > 0
-        ? Math.min(100, modifier.chancePercentBonus)
-        : 100,
-      amount: applyAmount(0, modifier),
-      duration: applyDuration(baseDuration, modifier),
-      criticalChancePercent: Math.min(100, Math.max(0, modifier.criticalChanceBonus)),
-      criticalMultiplier: Math.max(1, DEFAULT_CRITICAL_MULTIPLIER + modifier.criticalMultiplierBonus),
-      visualColor: modifier.visualColor ?? ability.color,
-      target: createMissingTarget({ type: 'nearest-enemies', count: 1 }, modifier),
-    };
-  }
-
-  if (type === 'slow') {
-    const baseDuration = modifier.durationFlat > 0 ? 0 : 1;
-    return {
-      type,
-      slowPercent: Math.min(100, Math.max(0, modifier.slowPercentBonus)),
-      duration: applyDuration(baseDuration, modifier),
-      target: createMissingTarget({ type: 'all-enemies' }, modifier),
-    };
-  }
-
-  return {
-    type: 'heal',
-    amount: applyAmount(0, modifier),
-    target: { type: 'castle' },
-  };
 }
 
 export function applyAbilityRuntimeModifier(
@@ -288,9 +305,11 @@ export function applyAbilityRuntimeModifier(
 ): AbilityDefinition {
   if (!modifier) return ability;
 
-  const seen = new Set<AbilityEffect['type']>();
-  const effects = ability.effects.map((effect) => {
-    seen.add(effect.type);
+  const sourceEffects = [
+    ...ability.effects,
+    ...modifier.addedEffects.map((effect) => ({ ...effect, target: { ...effect.target } } as AbilityEffect)),
+  ];
+  const effects = sourceEffects.map((effect) => {
 
     if (effect.type === 'damage') {
       return {
@@ -298,7 +317,7 @@ export function applyAbilityRuntimeModifier(
         amount: applyAmount(effect.amount, modifier.damage),
         damageSourceId: modifier.damage.damageSourceId ?? effect.damageSourceId,
         criticalChancePercent: Math.min(100, Math.max(0, effect.criticalChancePercent + modifier.damage.criticalChanceBonus)),
-        criticalMultiplier: Math.max(1, effect.criticalMultiplier + modifier.damage.criticalMultiplierBonus),
+        criticalMultiplier: applyCriticalMultiplier(effect.criticalMultiplier, modifier.damage.criticalMultiplierBonus),
         target: applyTarget(effect.target, modifier.damage),
       };
     }
@@ -310,7 +329,7 @@ export function applyAbilityRuntimeModifier(
         amount: applyAmount(effect.amount, modifier.periodicDamage),
         duration: applyDuration(effect.duration, modifier.periodicDamage),
         criticalChancePercent: Math.min(100, Math.max(0, effect.criticalChancePercent + modifier.periodicDamage.criticalChanceBonus)),
-        criticalMultiplier: Math.max(1, effect.criticalMultiplier + modifier.periodicDamage.criticalMultiplierBonus),
+        criticalMultiplier: applyCriticalMultiplier(effect.criticalMultiplier, modifier.periodicDamage.criticalMultiplierBonus),
         visualColor: modifier.periodicDamage.visualColor ?? effect.visualColor,
         target: applyTarget(effect.target, modifier.periodicDamage),
       };
@@ -331,19 +350,6 @@ export function applyAbilityRuntimeModifier(
       target: { ...effect.target },
     };
   });
-
-  if (modifier.damage.active && !seen.has('damage')) {
-    effects.push(createMissingEffect(ability, 'damage', modifier.damage));
-  }
-  if (modifier.periodicDamage.active && !seen.has('periodic-damage')) {
-    effects.push(createMissingEffect(ability, 'periodic-damage', modifier.periodicDamage));
-  }
-  if (modifier.slow.active && !seen.has('slow')) {
-    effects.push(createMissingEffect(ability, 'slow', modifier.slow));
-  }
-  if (modifier.heal.active && !seen.has('heal')) {
-    effects.push(createMissingEffect(ability, 'heal', modifier.heal));
-  }
 
   return { ...ability, effects };
 }

@@ -752,6 +752,23 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
                   {validation.errors.upgradeCardCount && <small className={styles.fieldError}>{validation.errors.upgradeCardCount}</small>}
                 </label>
 
+                <label className={styles.field}>
+                  <span>Максимальное количество получений одной карточки</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={Number.isFinite(draft.upgradeSettings.maxCardReceives) ? draft.upgradeSettings.maxCardReceives : ''}
+                    aria-invalid={Boolean(validation.errors.upgradeMaxCardReceives)}
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      upgradeSettings: { ...current.upgradeSettings, maxCardReceives: inputNumber(event.target.value) },
+                    }))}
+                  />
+                  <small className={styles.fieldHint}>Максимальное число раз, которое одну и ту же карточку можно получить за прохождение этой карты.</small>
+                  {validation.errors.upgradeMaxCardReceives && <small className={styles.fieldError}>{validation.errors.upgradeMaxCardReceives}</small>}
+                </label>
+
                 <label className={styles.checkboxField}>
                   <input
                     type="checkbox"

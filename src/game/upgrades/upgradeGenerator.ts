@@ -22,6 +22,7 @@ export function generateUpgradeChoices(
   cards: UpgradeCardDefinition[],
   counts: Record<string, number>,
   cardCount: number,
+  maxCardReceives: number,
   random: () => number = Math.random,
 ): UpgradeCardDefinition[] {
   const targetCount = Math.max(0, Math.floor(cardCount));
@@ -30,7 +31,7 @@ export function generateUpgradeChoices(
   const available = cards.filter((card) => (
     Number.isFinite(card.weight) &&
     card.weight > 0 &&
-    (counts[card.id] ?? 0) < card.maxCount
+    (counts[card.id] ?? 0) < maxCardReceives
   ));
   if (available.length === 0) return [];
 
