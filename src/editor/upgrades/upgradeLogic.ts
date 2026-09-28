@@ -80,11 +80,18 @@ function getAbilityEffect(ability: AbilityDefinition | undefined, type: AbilityE
 
 export function getCompatibleUpgradeEffectTypes(ability?: AbilityDefinition): UpgradeEffectType[] {
   if (!ability) return [];
-  return UPGRADE_EFFECT_OPTIONS.map((option) => option.type);
+  const allowedParameters = new Set(ability.allowedUpgradeParameters);
+  return UPGRADE_EFFECT_OPTIONS
+    .map((option) => option.type)
+    .filter((type) => allowedParameters.has(type));
 }
 
 export function isUpgradeEffectCompatible(effect: UpgradeEffect, ability?: AbilityDefinition): boolean {
-  return Boolean(ability && getUpgradeEffectOption(effect.type));
+  return Boolean(
+    ability &&
+    getUpgradeEffectOption(effect.type) &&
+    ability.allowedUpgradeParameters.includes(effect.type),
+  );
 }
 
 const TARGET_EFFECT_TYPES = new Set<UpgradeTargetEffectType>([
@@ -474,6 +481,63 @@ function validateEffectValue(
   }
 
   return undefined;
+}
+
+export interface UpgradeParameterRemovalResult {
+  cards: UpgradeCardDefinition[];
+  changedCardCount: number;
+  deletedCardCount: number;
+}
+
+export function removeUpgradeParametersFromCards(
+  cards: UpgradeCardDefinition[],
+  abilityId: string,
+  parameters: UpgradeEffectType[],
+): UpgradeParameterRemovalResult {
+  const disabled = new Set(parameters);
+  if (disabled.size === 0) {
+    return { cards, changedCardCount: 0, deletedCardCount: 0 };
+  }
+
+  const nextCards: UpgradeCardDefinition[] = [];
+  let changedCardCount = 0;
+  let deletedCardCount = 0;
+
+  for (const card of cards) {
+    const effects = card.effects.filter((effect) => (
+      effect.abilityId !== abilityId || !disabled.has(effect.type)
+    ));
+
+    if (effects.length === card.effects.length) {
+      nextCards.push(card);
+      continue;
+    }
+
+    if (effects.length === 0) {
+      deletedCardCount += 1;
+      continue;
+    }
+
+    changedCardCount += 1;
+    nextCards.push({ ...card, effects });
+  }
+
+  return { cards: nextCards, changedCardCount, deletedCardCount };
+}
+
+export function calculateUpgradeCardChancePercent(
+  card: UpgradeCardDefinition,
+  cards: UpgradeCardDefinition[],
+  editingId?: string,
+): number {
+  if (!Number.isFinite(card.weight) || card.weight <= 0) return 0;
+
+  const totalWeight = cards.reduce((sum, current) => {
+    if (editingId && current.id === editingId) return sum;
+    return Number.isFinite(current.weight) && current.weight > 0 ? sum + current.weight : sum;
+  }, card.weight);
+
+  return totalWeight > 0 ? (card.weight / totalWeight) * 100 : 0;
 }
 
 export function validateUpgradeCard(

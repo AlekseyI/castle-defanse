@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UPGRADE_EFFECT_TYPES } from '../../../src/editor/upgrades/types';
 import { DEFAULT_ABILITIES } from '../../../src/editor/abilities/defaultAbilities';
 import type { AbilityDefinition } from '../../../src/editor/abilities/types';
 import { DEFAULT_UPGRADES } from '../../../src/editor/upgrades/defaultUpgrades';
@@ -11,6 +12,7 @@ import {
 const ability: AbilityDefinition = {
   id: 'fire',
   name: 'Огонь',
+  allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
   visualEffect: 'fire',
   color: '#ff0000',
   effects: [
@@ -117,6 +119,7 @@ describe('upgradeCalculator', () => {
     const base: AbilityDefinition = {
       id: 'bolt',
       name: 'Разряд',
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'lightning',
       color: '#00aaff',
       effects: [],
@@ -161,6 +164,7 @@ describe('upgradeCalculator', () => {
     const base: AbilityDefinition = {
       id: 'utility',
       name: 'Утилита',
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'none',
       color: '#ffffff',
       effects: [],

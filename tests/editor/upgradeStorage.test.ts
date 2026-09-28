@@ -77,9 +77,9 @@ describe('upgradeStorage', () => {
     expect(loadUpgrades()).toEqual([tradeOff]);
   });
 
-  it('persists direct target, source and color values in the current format', () => {
+  it('removes target type effects from existing cards and deletes target-only cards', () => {
     installLocalStorage();
-    const current: UpgradeCardDefinition = {
+    const mixed: UpgradeCardDefinition = {
       ...card,
       effects: [
         { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 45 } },
@@ -87,9 +87,41 @@ describe('upgradeStorage', () => {
         { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
       ],
     };
+    const targetOnly: UpgradeCardDefinition = {
+      ...card,
+      id: 'target_only',
+      effects: [
+        { type: 'ability-slow-target-type', abilityId: 'fire', value: { type: 'all-enemies', count: 0, areaHeightPercent: 0 } },
+      ],
+    };
 
-    persistUpgrades([current]);
-    expect(loadUpgrades()).toEqual([current]);
+    window.localStorage.setItem('game.upgrades.v3', JSON.stringify([mixed, targetOnly]));
+
+    const expected = [{
+      ...mixed,
+      effects: [
+        { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
+        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
+      ],
+    }];
+    expect(loadUpgrades()).toEqual(expected);
+    expect(JSON.parse(window.localStorage.getItem('game.upgrades.v3') ?? '[]')).toEqual(expected);
+  });
+
+
+  it('persists target type effects after the parameter is enabled for the ability', () => {
+    installLocalStorage();
+    const withTargetTypes: UpgradeCardDefinition = {
+      ...card,
+      effects: [
+        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 45 } },
+        { type: 'ability-slow-target-type', abilityId: 'fire', value: { type: 'all-enemies', count: 0, areaHeightPercent: 0 } },
+      ],
+    };
+
+    persistUpgrades([withTargetTypes]);
+
+    expect(loadUpgrades()).toEqual([withTargetTypes]);
   });
 
   it('does not load the previous storage version', () => {

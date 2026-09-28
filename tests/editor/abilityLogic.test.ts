@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UPGRADE_CARD_EFFECT_TYPES, UPGRADE_EFFECT_TYPES } from '../../src/editor/upgrades/types';
 import {
   changeAbilityEffectTarget,
   changeAbilityEffectTypes,
@@ -26,6 +27,7 @@ const fireAbility: AbilityDefinition = {
     criticalMultiplier: 1.5,
     target: { type: 'nearest-enemies', count: 4 },
   }],
+  allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
   visualEffect: 'fire',
   color: '#e9573f',
 };
@@ -43,6 +45,7 @@ describe('abilityLogic', () => {
         criticalMultiplier: 1.5,
         target: { type: 'nearest-enemies', count: 1 },
       }],
+      allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
       visualEffect: 'none',
       color: '#64748b',
     });
@@ -95,6 +98,7 @@ describe('abilityLogic', () => {
         duration: 3,
         target: { type: 'all-enemies' },
       }],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'ice',
       color: '#4ba3ff',
     };
@@ -167,6 +171,7 @@ describe('abilityLogic', () => {
           target: { type: 'castle' },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'fire',
       color: '#e9573f',
     };
@@ -208,6 +213,7 @@ describe('abilityLogic', () => {
           target: { type: 'random-enemies', count: 2 },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'ice',
     })).toEqual({
       id: 'fire_new',
@@ -239,6 +245,7 @@ describe('abilityLogic', () => {
           target: { type: 'random-enemies', count: 2 },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'ice',
       color: '#abcdef',
       image: { name: 'icon.svg', src: 'data:image/svg+xml;base64,AAA' },
@@ -275,6 +282,7 @@ describe('abilityLogic', () => {
           target: { type: 'area-enemies', areaHeightPercent: 0 },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'lightning',
       color: 'yellow',
     };
@@ -316,6 +324,7 @@ describe('abilityLogic', () => {
           target: { type: 'castle' },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
       visualEffect: 'ice',
     };
     expect(validateAbility(mixed, [], damageSources).valid).toBe(true);

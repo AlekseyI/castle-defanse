@@ -12,6 +12,12 @@ import {
   validateAbility,
 } from '../../editor/abilities/abilityLogic';
 import { loadAbilities, persistAbilities } from '../../editor/abilities/abilityStorage';
+import {
+  UPGRADE_EFFECT_OPTIONS,
+  removeUpgradeParametersFromCards,
+} from '../../editor/upgrades/upgradeLogic';
+import { loadUpgrades, persistUpgrades } from '../../editor/upgrades/upgradeStorage';
+import type { UpgradeEffectType } from '../../editor/upgrades/types';
 import type {
   AbilityDefinition,
   AbilityEffect,
@@ -65,6 +71,7 @@ function cloneAbility(ability: AbilityDefinition): AbilityDefinition {
     ...ability,
     image: ability.image ? { ...ability.image } : undefined,
     effects: ability.effects.map((effect) => ({ ...effect, target: { ...effect.target } })),
+    allowedUpgradeParameters: [...ability.allowedUpgradeParameters],
   };
 }
 
@@ -78,6 +85,13 @@ function getEffectTypes(ability: AbilityDefinition): AbilityEffectType[] {
 
 function getEffectLabel(ability: AbilityDefinition): string {
   return getEffectTypes(ability).map((type) => EFFECT_TYPE_LABELS[type]).join(', ') || 'Эффекты не выбраны';
+}
+
+function getUpgradeParametersLabel(ability: AbilityDefinition): string {
+  const count = ability.allowedUpgradeParameters.length;
+  if (count === 0) return 'Параметры не выбраны';
+  if (count === UPGRADE_EFFECT_OPTIONS.length) return 'Все параметры';
+  return `Выбрано: ${count}`;
 }
 
 function getAbilityGlyph(ability: AbilityDefinition): string {
@@ -137,6 +151,18 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
     const current = editingId ? abilities.find((ability) => ability.id === editingId) : undefined;
     if (current && JSON.stringify(current) === JSON.stringify(normalized)) return;
 
+    if (current) {
+      const disabledParameters = current.allowedUpgradeParameters.filter((parameter) => (
+        !normalized.allowedUpgradeParameters.includes(parameter)
+      ));
+      if (disabledParameters.length > 0) {
+        const impact = removeUpgradeParametersFromCards(loadUpgrades(), current.id, disabledParameters);
+        if (impact.changedCardCount > 0 || impact.deletedCardCount > 0) {
+          persistUpgrades(impact.cards);
+        }
+      }
+    }
+
     const next = saveAbility(abilities, normalized, editingId);
     updateAbilities(next);
     setSelectedId(normalized.id);
@@ -180,6 +206,36 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
     setEditingId(next?.id);
     setDraft(cloneAbility(next ?? createEmptyAbility(damageSources)));
     setIsCreating(false);
+  };
+
+  const handleUpgradeParameterToggle = (parameter: UpgradeEffectType, checked: boolean) => {
+    if (checked) {
+      setDraft((current) => ({
+        ...current,
+        allowedUpgradeParameters: current.allowedUpgradeParameters.includes(parameter)
+          ? current.allowedUpgradeParameters
+          : [...current.allowedUpgradeParameters, parameter],
+      }));
+      return;
+    }
+
+    if (editingId) {
+      const impact = removeUpgradeParametersFromCards(loadUpgrades(), editingId, [parameter]);
+      if (impact.changedCardCount > 0 || impact.deletedCardCount > 0) {
+        const confirmed = window.confirm(
+          'Вы отключаете параметр, который используется в существующих карточках улучшений.\n\n' +
+          `Будет изменено карточек: ${impact.changedCardCount}\n` +
+          `Будет полностью удалено карточек: ${impact.deletedCardCount}\n\n` +
+          'Продолжить?',
+        );
+        if (!confirmed) return;
+      }
+    }
+
+    setDraft((current) => ({
+      ...current,
+      allowedUpgradeParameters: current.allowedUpgradeParameters.filter((type) => type !== parameter),
+    }));
   };
 
   const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -460,6 +516,33 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                     placeholder="Что делает способность"
                   />
                 </label>
+              </div>
+            </div>
+
+            <div className={styles.formSection}>
+              <h2>Параметры улучшений</h2>
+              <div className={styles.formGrid}>
+                <div className={`${styles.field} ${styles.fullRow}`}>
+                  <span>Доступно в карточках улучшений</span>
+                  <details className={styles.multiSelect}>
+                    <summary>{getUpgradeParametersLabel(draft)}</summary>
+                    <div className={styles.multiSelectMenu}>
+                      {UPGRADE_EFFECT_OPTIONS.map((option) => {
+                        const checked = draft.allowedUpgradeParameters.includes(option.type);
+                        return (
+                          <label key={option.type} className={styles.multiSelectOption}>
+                            <EditorCheckbox
+                              className={styles.multiSelectCheckbox}
+                              checked={checked}
+                              onChange={(event) => handleUpgradeParameterToggle(option.type, event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </div>
               </div>
             </div>
 

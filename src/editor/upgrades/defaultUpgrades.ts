@@ -39,7 +39,6 @@ export const DEFAULT_UPGRADES: UpgradeCardDefinition[] = [
     weight: 8,
     color: '#dc2626',
     effects: [
-      { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 50 } },
       { type: 'ability-damage-area-height', abilityId: 'fire', value: 50 },
     ],
   },
@@ -51,7 +50,6 @@ export const DEFAULT_UPGRADES: UpgradeCardDefinition[] = [
     weight: 65,
     color: '#eab308',
     effects: [
-      { type: 'ability-damage-target-type', abilityId: 'lightning', value: { type: 'random-enemies', count: 3, areaHeightPercent: 0 } },
       { type: 'ability-damage-target-count', abilityId: 'lightning', value: 3 },
     ],
   },
@@ -93,7 +91,6 @@ export const DEFAULT_UPGRADES: UpgradeCardDefinition[] = [
     weight: 24,
     color: '#2563eb',
     effects: [
-      { type: 'ability-slow-target-type', abilityId: 'ice', value: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 } },
       { type: 'ability-slow-target-count', abilityId: 'ice', value: 5 },
     ],
   },
@@ -105,7 +102,6 @@ export const DEFAULT_UPGRADES: UpgradeCardDefinition[] = [
     weight: 6,
     color: '#1d4ed8',
     effects: [
-      { type: 'ability-slow-target-type', abilityId: 'ice', value: { type: 'area-enemies', count: 0, areaHeightPercent: 50 } },
       { type: 'ability-slow-area-height', abilityId: 'ice', value: 100 },
     ],
   },

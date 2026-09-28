@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UPGRADE_CARD_EFFECT_TYPES } from '../../src/editor/upgrades/types';
 import { loadAbilities, persistAbilities } from '../../src/editor/abilities/abilityStorage';
 import type { AbilityDefinition } from '../../src/editor/abilities/types';
 
@@ -37,6 +38,7 @@ describe('ability effects storage', () => {
           target: { type: 'castle' },
         },
       ],
+      allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
       visualEffect: 'fire',
       color: '#58c985',
     }];

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UPGRADE_CARD_EFFECT_TYPES, UPGRADE_EFFECT_TYPES } from '../../src/editor/upgrades/types';
 import { DEFAULT_ABILITIES } from '../../src/editor/abilities/defaultAbilities';
 import { loadAbilities, persistAbilities } from '../../src/editor/abilities/abilityStorage';
 import type { AbilityDefinition } from '../../src/editor/abilities/types';
@@ -39,6 +40,7 @@ describe('abilityStorage', () => {
             target: { type: 'castle' },
           },
         ],
+        allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
         visualEffect: 'fire',
         color: '#e9573f',
         image: { name: 'fire.svg', src: 'data:image/svg+xml;base64,AAA' },
@@ -67,6 +69,7 @@ describe('abilityStorage', () => {
             target: { type: 'area-enemies', areaHeightPercent: 50 },
           },
         ],
+        allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
         visualEffect: 'fire',
         color: '#e9573f',
         image: { name: 'fire.svg', src: 'data:image/svg+xml;base64,AAA' },
@@ -77,9 +80,62 @@ describe('abilityStorage', () => {
     expect(loadAbilities()).toEqual(abilities);
   });
 
+  it('removes target type parameters from current saved abilities', () => {
+    installLocalStorage();
+    const ability: AbilityDefinition = {
+      id: 'fire',
+      name: 'Огонь',
+      effects: [{
+        type: 'damage',
+        amount: 55,
+        damageSourceId: 'fire',
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        target: { type: 'all-enemies' },
+      }],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
+      visualEffect: 'fire',
+      color: '#e9573f',
+    };
+    window.localStorage.setItem('game.abilities.v9', JSON.stringify([ability]));
+
+    expect(loadAbilities()).toEqual([{
+      ...ability,
+      allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    }]);
+    expect(JSON.parse(window.localStorage.getItem('game.abilities.v9') ?? '[]')).toEqual([{
+      ...ability,
+      allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    }]);
+  });
+
+
+  it('preserves target type parameters after they are enabled through the ability setting', () => {
+    installLocalStorage();
+    const ability: AbilityDefinition = {
+      id: 'fire',
+      name: 'Огонь',
+      effects: [{
+        type: 'damage',
+        amount: 55,
+        damageSourceId: 'fire',
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        target: { type: 'all-enemies' },
+      }],
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
+      visualEffect: 'fire',
+      color: '#e9573f',
+    };
+
+    persistAbilities([ability]);
+
+    expect(loadAbilities()).toEqual([ability]);
+  });
+
   it('rejects duplicate effect types in saved json', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.abilities.v8', JSON.stringify([
+    window.localStorage.setItem('game.abilities.v9', JSON.stringify([
       {
         id: 'double_damage',
         name: 'Двойной урон',
@@ -101,6 +157,7 @@ describe('abilityStorage', () => {
             target: { type: 'all-enemies' },
           },
         ],
+        allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
         visualEffect: 'fire',
         color: '#e9573f',
       },
@@ -111,7 +168,7 @@ describe('abilityStorage', () => {
 
   it('does not load the previous json storage version', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.abilities.v7', JSON.stringify([
+    window.localStorage.setItem('game.abilities.v8', JSON.stringify([
       {
         id: 'fire',
         name: 'Огонь',

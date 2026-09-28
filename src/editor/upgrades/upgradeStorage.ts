@@ -11,6 +11,7 @@ import type {
 } from './types';
 
 const STORAGE_KEY = 'game.upgrades.v3';
+const TARGET_TYPE_DEFAULTS_MIGRATION_KEY = 'game.upgrades.targetTypeDefaults.v1';
 const CARD_KEYS = new Set(['id', 'name', 'description', 'rarity', 'weight', 'effects', 'color', 'image']);
 const EFFECT_KEYS = new Set(['type', 'abilityId', 'value']);
 const IMAGE_KEYS = new Set(['name', 'src']);
@@ -194,6 +195,18 @@ function isCard(value: unknown): value is UpgradeCardDefinition {
   );
 }
 
+
+function withoutTargetTypeEffects(cards: UpgradeCardDefinition[]): UpgradeCardDefinition[] {
+  return cards.flatMap((card) => {
+    const effects = card.effects.filter((effect) => !TARGET_VALUE_TYPES.has(effect.type as UpgradeTargetEffectType));
+    return effects.length > 0 ? [{ ...card, effects }] : [];
+  });
+}
+
+function completeTargetTypeDefaultsMigration(): void {
+  window.localStorage.setItem(TARGET_TYPE_DEFAULTS_MIGRATION_KEY, '1');
+}
+
 function cloneDefaults(): UpgradeCardDefinition[] {
   return DEFAULT_UPGRADES.map((card) => ({
     ...card,
@@ -211,18 +224,33 @@ function cloneDefaults(): UpgradeCardDefinition[] {
 
 export function loadUpgrades(): UpgradeCardDefinition[] {
   if (typeof window === 'undefined') return cloneDefaults();
+
+  const migrationCompleted = window.localStorage.getItem(TARGET_TYPE_DEFAULTS_MIGRATION_KEY) === '1';
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return cloneDefaults();
+  if (!raw) {
+    completeTargetTypeDefaultsMigration();
+    return cloneDefaults();
+  }
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed) || !parsed.every(isCard)) return cloneDefaults();
-    return parsed;
+    if (!Array.isArray(parsed) || !parsed.every(isCard)) {
+      completeTargetTypeDefaultsMigration();
+      return cloneDefaults();
+    }
+    if (migrationCompleted) return parsed;
+
+    const migrated = withoutTargetTypeEffects(parsed);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    completeTargetTypeDefaultsMigration();
+    return migrated;
   } catch {
+    completeTargetTypeDefaultsMigration();
     return cloneDefaults();
   }
 }
 
 export function persistUpgrades(cards: UpgradeCardDefinition[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+  completeTargetTypeDefaultsMigration();
 }

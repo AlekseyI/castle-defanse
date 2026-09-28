@@ -1,3 +1,4 @@
+import { UPGRADE_EFFECT_TYPES, UPGRADE_TARGET_EFFECT_TYPES } from '../upgrades/types';
 import { DEFAULT_ABILITIES } from './defaultAbilities';
 import type {
   AbilityDefinition,
@@ -9,8 +10,9 @@ import type {
   AbilityVisualEffect,
 } from './types';
 
-const STORAGE_KEY = 'game.abilities.v8';
-const ABILITY_KEYS = new Set(['id', 'name', 'description', 'effects', 'visualEffect', 'color', 'image']);
+const STORAGE_KEY = 'game.abilities.v9';
+const TARGET_TYPE_DEFAULTS_MIGRATION_KEY = 'game.abilities.targetTypeDefaults.v1';
+const ABILITY_KEYS = new Set(['id', 'name', 'description', 'effects', 'allowedUpgradeParameters', 'visualEffect', 'color', 'image']);
 const IMAGE_KEYS = new Set(['name', 'src']);
 const TARGET_KEYS = new Set(['type', 'count', 'areaHeightPercent']);
 const DAMAGE_EFFECT_KEYS = new Set(['type', 'amount', 'damageSourceId', 'criticalChancePercent', 'criticalMultiplier', 'target']);
@@ -20,6 +22,8 @@ const HEAL_EFFECT_KEYS = new Set(['type', 'amount', 'target']);
 const EFFECT_TYPES: AbilityEffectType[] = ['damage', 'periodic-damage', 'slow', 'heal'];
 const VISUAL_EFFECTS: AbilityVisualEffect[] = ['none', 'fire', 'ice', 'lightning', 'heal'];
 const TARGET_TYPES: AbilityTargetType[] = ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle'];
+const UPGRADE_PARAMETER_TYPES = new Set<string>(UPGRADE_EFFECT_TYPES);
+const TARGET_TYPE_UPGRADE_PARAMETERS = new Set<string>(UPGRADE_TARGET_EFFECT_TYPES);
 
 const EFFECT_TARGETS: Record<AbilityEffectType, AbilityTargetType[]> = {
   damage: ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle'],
@@ -99,6 +103,9 @@ function isAbilityDefinition(value: unknown): value is AbilityDefinition {
     typeof ability.id === 'string' &&
     typeof ability.name === 'string' &&
     (ability.description === undefined || typeof ability.description === 'string') &&
+    Array.isArray(ability.allowedUpgradeParameters) &&
+    ability.allowedUpgradeParameters.every((parameter) => typeof parameter === 'string' && UPGRADE_PARAMETER_TYPES.has(parameter)) &&
+    new Set(ability.allowedUpgradeParameters).size === ability.allowedUpgradeParameters.length &&
     typeof ability.visualEffect === 'string' &&
     VISUAL_EFFECTS.includes(ability.visualEffect as AbilityVisualEffect) &&
     typeof ability.color === 'string' &&
@@ -110,10 +117,25 @@ function cloneEffect(effect: AbilityEffect): AbilityEffect {
   return { ...effect, target: { ...effect.target } };
 }
 
+
+function withoutTargetTypeUpgradeParameters(ability: AbilityDefinition): AbilityDefinition {
+  return {
+    ...ability,
+    allowedUpgradeParameters: ability.allowedUpgradeParameters.filter((parameter) => (
+      !TARGET_TYPE_UPGRADE_PARAMETERS.has(parameter)
+    )),
+  };
+}
+
+function completeTargetTypeDefaultsMigration(): void {
+  window.localStorage.setItem(TARGET_TYPE_DEFAULTS_MIGRATION_KEY, '1');
+}
+
 function cloneDefaults(): AbilityDefinition[] {
   return DEFAULT_ABILITIES.map((ability) => ({
     ...ability,
     effects: ability.effects.map(cloneEffect),
+    allowedUpgradeParameters: [...ability.allowedUpgradeParameters],
     image: ability.image ? { ...ability.image } : undefined,
   }));
 }
@@ -121,18 +143,32 @@ function cloneDefaults(): AbilityDefinition[] {
 export function loadAbilities(): AbilityDefinition[] {
   if (typeof window === 'undefined') return cloneDefaults();
 
+  const migrationCompleted = window.localStorage.getItem(TARGET_TYPE_DEFAULTS_MIGRATION_KEY) === '1';
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return cloneDefaults();
+  if (!raw) {
+    completeTargetTypeDefaultsMigration();
+    return cloneDefaults();
+  }
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed) || !parsed.every(isAbilityDefinition)) return cloneDefaults();
-    return parsed;
+    if (!Array.isArray(parsed) || !parsed.every(isAbilityDefinition)) {
+      completeTargetTypeDefaultsMigration();
+      return cloneDefaults();
+    }
+    if (migrationCompleted) return parsed;
+
+    const migrated = parsed.map(withoutTargetTypeUpgradeParameters);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    completeTargetTypeDefaultsMigration();
+    return migrated;
   } catch {
+    completeTargetTypeDefaultsMigration();
     return cloneDefaults();
   }
 }
 
 export function persistAbilities(abilities: AbilityDefinition[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(abilities));
+  completeTargetTypeDefaultsMigration();
 }

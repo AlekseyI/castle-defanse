@@ -6,6 +6,7 @@ import type { AbilityTargetType } from '../../editor/abilities/types';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import {
   changeAddedTargetType,
+  calculateUpgradeCardChancePercent,
   changeUpgradeTargetType,
   cloneUpgradeCard,
   createEmptyUpgradeCard,
@@ -239,6 +240,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   const validation = useMemo(
     () => validateUpgradeCard(draft, cards, abilities, editingId, damageSources),
     [abilities, cards, damageSources, draft, editingId],
+  );
+
+  const calculatedChance = useMemo(
+    () => calculateUpgradeCardChancePercent(draft, cards, editingId),
+    [cards, draft, editingId],
   );
 
   const updateCards = (next: UpgradeCardDefinition[]) => {
@@ -634,6 +640,13 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                   aria-invalid={Boolean(validation.errors.weight)}
                   onChange={(event) => setDraft((current) => ({ ...current, weight: numberValue(event.target.value) }))}
                 />
+                <small className={styles.fieldHint}>
+                  Чем выше вес карточки относительно других карточек, тем чаще она будет выпадать. Вес не является процентом. Например, карточка с весом 100 будет выпадать примерно в 2 раза чаще карточки с весом 50.
+                </small>
+                <small className={styles.calculatedChance}>Расчётный шанс: ≈ {Math.round(calculatedChance)}%</small>
+                <small className={styles.fieldHint}>
+                  Фактический шанс может меняться, если часть карточек недоступна игроку из-за лимитов или других условий.
+                </small>
                 {validation.errors.weight && <small className={styles.fieldError}>{validation.errors.weight}</small>}
               </label>
 
@@ -670,7 +683,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <div className={styles.effectsHeader}>
               <div>
                 <h2>Эффекты</h2>
-                <p>Любой параметр доступен для любой способности: он может улучшить существующий эффект или создать отсутствующий. Для смены типа цели сразу задаются параметры новой цели.</p>
+                <p>Для выбранной способности доступны только параметры, разрешённые в её настройке «Доступно в карточках улучшений».</p>
               </div>
               <button
                 className={styles.primaryButton}

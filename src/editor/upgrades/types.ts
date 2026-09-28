@@ -36,6 +36,12 @@ export type UpgradeTargetEffectType =
   | 'ability-periodic-target-type'
   | 'ability-slow-target-type';
 
+export const UPGRADE_TARGET_EFFECT_TYPES: readonly UpgradeTargetEffectType[] = [
+  'ability-damage-target-type',
+  'ability-periodic-target-type',
+  'ability-slow-target-type',
+];
+
 export type UpgradeAddEffectType =
   | 'ability-add-damage'
   | 'ability-add-periodic-damage'
@@ -43,6 +49,44 @@ export type UpgradeAddEffectType =
   | 'ability-add-heal';
 
 export type UpgradeEffectType = UpgradeModifierEffectType | UpgradeAddEffectType;
+
+export const UPGRADE_EFFECT_TYPES: readonly UpgradeEffectType[] = [
+  'ability-damage-percent',
+  'ability-damage-flat',
+  'ability-damage-target-type',
+  'ability-damage-target-count',
+  'ability-damage-area-height',
+  'ability-damage-source',
+  'ability-damage-critical-chance',
+  'ability-damage-critical-multiplier',
+  'ability-periodic-damage-percent',
+  'ability-periodic-damage-flat',
+  'ability-periodic-target-type',
+  'ability-periodic-target-count',
+  'ability-periodic-area-height',
+  'ability-periodic-chance',
+  'ability-periodic-critical-chance',
+  'ability-periodic-critical-multiplier',
+  'ability-periodic-duration-percent',
+  'ability-periodic-duration-flat',
+  'ability-periodic-visual-color',
+  'ability-slow-percent',
+  'ability-slow-target-type',
+  'ability-slow-target-count',
+  'ability-slow-area-height',
+  'ability-slow-duration-percent',
+  'ability-slow-duration-flat',
+  'ability-heal-percent',
+  'ability-heal-flat',
+  'ability-add-damage',
+  'ability-add-periodic-damage',
+  'ability-add-slow',
+  'ability-add-heal',
+];
+
+export const UPGRADE_CARD_EFFECT_TYPES: readonly UpgradeEffectType[] = UPGRADE_EFFECT_TYPES.filter(
+  (type) => !UPGRADE_TARGET_EFFECT_TYPES.includes(type as UpgradeTargetEffectType),
+);
 
 export interface UpgradeTargetValue {
   type: AbilityTargetType;

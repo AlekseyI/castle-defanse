@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UPGRADE_EFFECT_TYPES } from '../../src/editor/upgrades/types';
 import { changeAbilityEffectTypes } from '../../src/editor/abilities/abilityLogic';
 import type { AbilityDefinition } from '../../src/editor/abilities/types';
 
@@ -11,6 +12,7 @@ const ability: AbilityDefinition = {
     duration: 3,
     target: { type: 'all-enemies' },
   }],
+  allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
   visualEffect: 'ice',
   color: '#4ba3ff',
 };

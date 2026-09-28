@@ -319,6 +319,22 @@
   letter-spacing: normal;
 }
 
+.fieldHint,
+.calculatedChance {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.45;
+}
+
+.fieldHint {
+  color: #94a3b8;
+}
+
+.calculatedChance {
+  color: #67e8f9;
+}
+
 .fullRow { grid-column: 1 / -1; }
 
 .colorRow {

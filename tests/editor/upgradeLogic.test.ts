@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { UPGRADE_EFFECT_TYPES } from '../../src/editor/upgrades/types';
 import { DEFAULT_ABILITIES } from '../../src/editor/abilities/defaultAbilities';
 import type { AbilityDefinition } from '../../src/editor/abilities/types';
 import { DEFAULT_DAMAGE_SOURCES } from '../../src/editor/damageSources/defaultDamageSources';
 import { DEFAULT_UPGRADES } from '../../src/editor/upgrades/defaultUpgrades';
 import {
+  calculateUpgradeCardChancePercent,
   changeAddedTargetType,
   getCompatibleUpgradeEffectTypes,
   getDefaultUpgradeEffectValue,
   normalizeUpgradeCard,
+  removeUpgradeParametersFromCards,
   validateUpgradeCard,
 } from '../../src/editor/upgrades/upgradeLogic';
 import type { UpgradeCardDefinition } from '../../src/editor/upgrades/types';
@@ -36,6 +39,7 @@ const abilities: AbilityDefinition[] = [
         target: { type: 'all-enemies' },
       },
     ],
+    allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
     visualEffect: 'fire',
     color: '#ff0000',
   },
@@ -52,6 +56,7 @@ const abilities: AbilityDefinition[] = [
         target: { type: 'nearest-enemies', count: 1 },
       },
     ],
+    allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
     visualEffect: 'lightning',
     color: '#00aaff',
   },
@@ -88,19 +93,67 @@ describe('upgradeLogic', () => {
     });
   });
 
-  it('offers the same complete parameter set for every selected ability', () => {
-    const fireTypes = getCompatibleUpgradeEffectTypes(abilities[0]);
-    const boltTypes = getCompatibleUpgradeEffectTypes(abilities[1]);
+  it('offers only parameters explicitly allowed by the selected ability', () => {
+    const restrictedAbility: AbilityDefinition = {
+      ...abilities[0],
+      allowedUpgradeParameters: ['ability-damage-percent', 'ability-add-slow'],
+    };
 
-    expect(fireTypes).toEqual(boltTypes);
-    expect(fireTypes).toContain('ability-damage-percent');
-    expect(fireTypes).toContain('ability-periodic-damage-flat');
-    expect(fireTypes).toContain('ability-slow-percent');
-    expect(fireTypes).toContain('ability-heal-flat');
-    expect(fireTypes).toContain('ability-add-damage');
-    expect(fireTypes).toContain('ability-add-periodic-damage');
-    expect(fireTypes).toContain('ability-add-slow');
-    expect(fireTypes).toContain('ability-add-heal');
+    expect(getCompatibleUpgradeEffectTypes(restrictedAbility)).toEqual([
+      'ability-damage-percent',
+      'ability-add-slow',
+    ]);
+  });
+
+  it('rejects a parameter that is not allowed for the selected ability', () => {
+    const restrictedAbility: AbilityDefinition = {
+      ...abilities[0],
+      allowedUpgradeParameters: ['ability-damage-percent'],
+    };
+    const result = validateUpgradeCard({
+      ...card,
+      effects: [{ type: 'ability-heal-flat', abilityId: 'fire', value: 5 }],
+    }, [], [restrictedAbility, abilities[1]]);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors['effect.0.type']).toBeTruthy();
+  });
+
+  it('removes disabled parameters from cards and deletes cards left without effects', () => {
+    const result = removeUpgradeParametersFromCards([
+      card,
+      {
+        ...card,
+        id: 'only_crit',
+        effects: [{ type: 'ability-damage-critical-chance', abilityId: 'fire', value: 5 }],
+      },
+      {
+        ...card,
+        id: 'mixed',
+        effects: [
+          { type: 'ability-damage-critical-chance', abilityId: 'fire', value: 5 },
+          { type: 'ability-damage-percent', abilityId: 'bolt', value: 10 },
+        ],
+      },
+    ], 'fire', ['ability-damage-critical-chance']);
+
+    expect(result.changedCardCount).toBe(1);
+    expect(result.deletedCardCount).toBe(1);
+    expect(result.cards.map((item) => item.id)).toEqual(['hellfire', 'mixed']);
+    expect(result.cards[1].effects).toEqual([
+      { type: 'ability-damage-percent', abilityId: 'bolt', value: 10 },
+    ]);
+  });
+
+  it('calculates informational chance from the current card weight and total pool weight', () => {
+    const cards: UpgradeCardDefinition[] = [
+      { ...card, id: 'a', weight: 100 },
+      { ...card, id: 'b', weight: 60 },
+      { ...card, id: 'c', weight: 40 },
+    ];
+
+    expect(calculateUpgradeCardChancePercent(cards[0], cards, 'a')).toBeCloseTo(50);
+    expect(calculateUpgradeCardChancePercent({ ...cards[0], weight: 120 }, cards, 'a')).toBeCloseTo(120 / 220 * 100);
   });
 
   it('creates every added effect with explicit usable target defaults', () => {
@@ -190,11 +243,10 @@ describe('upgradeLogic', () => {
     expect(result.errors).toEqual({});
   });
 
-  it('validates direct effect parameters used by the ability editor', () => {
+  it('validates direct source and color parameters used by the ability editor', () => {
     const result = validateUpgradeCard({
       ...card,
       effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'castle', count: 0, areaHeightPercent: 0 } },
         { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
         { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
       ],
@@ -204,28 +256,37 @@ describe('upgradeLogic', () => {
     expect(result.errors).toEqual({});
   });
 
-  it('requires dependent parameters for target changes', () => {
-    const nearest = validateUpgradeCard({
+  it('allows target type modifiers only when enabled in the ability settings', () => {
+    expect(getCompatibleUpgradeEffectTypes(abilities[0])).toContain('ability-damage-target-type');
+
+    const enabledResult = validateUpgradeCard({
       ...card,
       effects: [{
         type: 'ability-damage-target-type',
         abilityId: 'fire',
-        value: { type: 'nearest-enemies', count: 0, areaHeightPercent: 0 },
+        value: { type: 'castle', count: 0, areaHeightPercent: 0 },
       }],
     }, [], abilities);
-    const area = validateUpgradeCard({
+    expect(enabledResult.valid).toBe(true);
+
+    const restrictedAbility: AbilityDefinition = {
+      ...abilities[0],
+      allowedUpgradeParameters: abilities[0].allowedUpgradeParameters.filter(
+        (type) => type !== 'ability-damage-target-type',
+      ),
+    };
+    expect(getCompatibleUpgradeEffectTypes(restrictedAbility)).not.toContain('ability-damage-target-type');
+
+    const disabledResult = validateUpgradeCard({
       ...card,
       effects: [{
-        type: 'ability-periodic-target-type',
+        type: 'ability-damage-target-type',
         abilityId: 'fire',
-        value: { type: 'area-enemies', count: 0, areaHeightPercent: 0 },
+        value: { type: 'castle', count: 0, areaHeightPercent: 0 },
       }],
-    }, [], abilities);
-
-    expect(nearest.valid).toBe(false);
-    expect(nearest.errors['effect.0.value']).toBeTruthy();
-    expect(area.valid).toBe(false);
-    expect(area.errors['effect.0.value']).toBeTruthy();
+    }, [], [restrictedAbility, abilities[1]]);
+    expect(disabledResult.valid).toBe(false);
+    expect(disabledResult.errors['effect.0.type']).toBeTruthy();
   });
 
   it('accepts negative numeric modifiers for trade-off cards', () => {

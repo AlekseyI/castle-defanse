@@ -55,6 +55,7 @@ export interface AbilityDefinition {
   name: string;
   description?: string;
   effects: AbilityEffect[];
+  allowedUpgradeParameters: import('../upgrades/types').UpgradeEffectType[];
   visualEffect: AbilityVisualEffect;
   color: string;
   image?: AbilityImage;

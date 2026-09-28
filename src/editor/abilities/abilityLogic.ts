@@ -1,4 +1,5 @@
 import type { DamageSource } from '../damageSources/types';
+import { UPGRADE_CARD_EFFECT_TYPES, UPGRADE_EFFECT_TYPES } from '../upgrades/types';
 import type {
   AbilityDefinition,
   AbilityEffect,
@@ -104,6 +105,7 @@ export function createEmptyAbility(damageSources: DamageSource[]): AbilityDefini
     id: '',
     name: '',
     effects: [defaultEffect('damage', damageSources)],
+    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
     visualEffect: 'none',
     color: DEFAULT_COLOR,
   };
@@ -186,6 +188,9 @@ export function normalizeAbility(ability: AbilityDefinition): AbilityDefinition 
     name: ability.name.trim(),
     description: ability.description?.trim() || undefined,
     effects,
+    allowedUpgradeParameters: [...new Set(ability.allowedUpgradeParameters)].filter((parameter) => (
+      UPGRADE_EFFECT_TYPES.includes(parameter)
+    )),
     visualEffect: ability.visualEffect,
     color: ability.color.trim().toLowerCase(),
     image: ability.image?.src
