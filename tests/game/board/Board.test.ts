@@ -41,6 +41,21 @@ afterEach(() => {
 const TILE_KINDS = ['fire', 'ice', 'lightning', 'shield'];
 
 describe('Board', () => {
+  it('supports a 4 by 6 board', () => {
+    const board = new Board({
+      tileKinds: TILE_KINDS,
+      rows: 4,
+      columns: 6,
+      onCharge: vi.fn(),
+      wait: async () => undefined,
+    });
+
+    expect(board.getSnapshot().grid).toHaveLength(4);
+    expect(board.getSnapshot().grid.every((row) => row.length === 6)).toBe(true);
+
+    board.destroy();
+  });
+
   it('animates and restores a swap that does not create a match', async () => {
     const board = new Board({ tileKinds: TILE_KINDS, onCharge: vi.fn(), wait: async () => undefined });
     const initial = board.getSnapshot().grid.map((row) => [...row]);

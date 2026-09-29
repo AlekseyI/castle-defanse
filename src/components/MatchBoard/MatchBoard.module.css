@@ -8,13 +8,19 @@
 .board {
   --board-gap: clamp(3px, 0.65vw, 5px);
   display: grid;
-  grid-template-columns: repeat(var(--board-size), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--board-size), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--board-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--board-rows), minmax(0, 1fr));
   width: min(calc(100vw - 18px), 38vh, max(108px, calc(100vh - 310px)));
   width: min(calc(100vw - 18px), 38dvh, max(108px, calc(100dvh - 310px)));
-  aspect-ratio: 1;
+  aspect-ratio: var(--board-columns) / var(--board-rows);
   gap: var(--board-gap);
   touch-action: none;
+}
+
+
+.compactBoard {
+  width: min(calc(100vw - 42px), 390px, 70vh);
+  width: min(calc(100vw - 42px), 390px, 70dvh);
 }
 
 .tile,
@@ -117,7 +123,7 @@
 }
 
 @media (min-width: 601px) {
-  .board {
+  .board:not(.compactBoard) {
     width: min(430px, 38vh, max(108px, calc(100vh - 310px)));
     width: min(430px, 38dvh, max(108px, calc(100dvh - 310px)));
   }

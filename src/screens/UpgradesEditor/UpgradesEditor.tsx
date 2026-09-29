@@ -201,6 +201,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   );
 
   const selectedCard = cards.find((card) => card.id === selectedId) ?? null;
+  const fallbackLabel = draft.name.slice(0, 1).toUpperCase() || '•';
 
   const updateCards = (next: UpgradeCardDefinition[]) => {
     setCards(next);
@@ -525,12 +526,12 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     addField?: AddRangeKey,
   ) => (
     <div className={styles.rangeBlock}>
-      <strong className={styles.rangeTitle}>Диапазоны генерации по редкости — MIN / MAX / STEP</strong>
+      <strong className={styles.rangeTitle}>Диапазоны генерации по редкости — Минимум / Максимум / Шаг</strong>
       <div className={styles.rangeTable}>
         <div className={styles.rangeHead}>Редкость</div>
-        <div className={styles.rangeHead}>MIN</div>
-        <div className={styles.rangeHead}>MAX</div>
-        <div className={styles.rangeHead}>STEP</div>
+        <div className={styles.rangeHead}>Минимум</div>
+        <div className={styles.rangeHead}>Максимум</div>
+        <div className={styles.rangeHead}>Шаг</div>
         {RARITIES.map((rarity) => {
           const range = getRange(rarity);
           return (
@@ -677,45 +678,70 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   };
 
   const renderManualCards = () => (
-    <>
-      <section className={styles.hero}>
-        <span className={styles.kicker}>Ручные карточки</span>
-        <h1>Карточки улучшений</h1>
-        <p>Создавайте карточки вручную. В одной карточке можно добавить несколько параметров/эффектов.</p>
-      </section>
+    <section className={styles.layout}>
+      <aside className={styles.listPanel} aria-label="Карточки улучшений">
+        <div className={styles.listHeader}>
+          <div>
+            <h2>Карточки</h2>
+            <p>{cards.length} в проекте</p>
+          </div>
+          <button className={styles.addButton} type="button" onClick={openCreate} aria-label="Добавить карточку">+</button>
+        </div>
 
-      <section className={styles.manualLayout}>
-        <aside className={styles.cardListPanel}>
-          <div className={styles.cardListHeader}>
-            <div><strong>Карточки</strong><small>Всего: {cards.length}</small></div>
-            <button className={styles.primaryButton} type="button" onClick={openCreate}>+ Создать</button>
+        <div className={styles.list}>
+          {sortedCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              className={`${styles.listItem}${selectedId === card.id && !isCreating ? ` ${styles.active}` : ''}`}
+              onClick={() => selectCard(card)}
+            >
+              <span className={styles.listIcon} style={{ borderColor: card.color ?? undefined }}>
+                {card.image ? <img src={card.image.src} alt="" /> : card.name.slice(0, 1).toUpperCase() || '•'}
+              </span>
+              <span className={styles.listItemText}>
+                <strong>{card.name || 'Без названия'}</strong>
+                <small>{RARITY_LABELS[card.rarity]} · {card.effects.length} параметров · {card.id}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <section className={styles.formPanel}>
+        <div className={styles.formHeader}>
+          <div className={styles.cardPreview}>
+            <div className={styles.preview} style={{ borderColor: draft.color ?? undefined }}>
+              {draft.image ? <img src={draft.image.src} alt="" /> : fallbackLabel}
+            </div>
+            <div className={styles.previewText}>
+              <span className={styles.kicker}>{RARITY_LABELS[draft.rarity]} карточка</span>
+              <h1>{isCreating ? 'Новая карточка' : draft.name || 'Без названия'}</h1>
+              <p>Параметров: {draft.effects.length} · шанс по весу: {calculateUpgradeCardChancePercent(draft, cards, editingId).toFixed(1)}%</p>
+            </div>
           </div>
-          <div className={styles.cardList}>
-            {sortedCards.length === 0 && <p className={styles.emptyPreview}>Ручных карточек пока нет.</p>}
-            {sortedCards.map((card) => (
-              <button
-                className={`${styles.cardListItem} ${selectedId === card.id ? styles.cardListItemActive : ''}`}
-                type="button"
-                key={card.id}
-                onClick={() => selectCard(card)}
-              >
-                <strong>{card.name || card.id}</strong>
-                <span>{RARITY_LABELS[card.rarity]} · параметров: {card.effects.length}</span>
-                <small>{card.id}</small>
-              </button>
-            ))}
+
+          <div className={styles.headerActions}>
+            <label className={styles.fileButton}>
+              Загрузить картинку
+              <EditorFileInput accept="image/*" mode="overlay" onChange={handleCardImageUpload} />
+            </label>
+            <button className={styles.saveButton} type="button" disabled={!validation.valid} onClick={saveManualCard}>Сохранить</button>
+            {isCreating ? (
+              <button className={styles.toolbarButton} type="button" onClick={cancelCreate}>Отмена</button>
+            ) : (
+              <button className={styles.dangerButton} type="button" onClick={removeManualCard}>Удалить</button>
+            )}
           </div>
-        </aside>
+        </div>
 
         <section className={styles.formSection}>
           <div className={styles.sectionHeader}>
             <div>
-              <h2>{isCreating ? 'Новая карточка' : 'Редактирование карточки'}</h2>
-              <p>Ручные карточки сохраняются отдельно от правил автоматической генерации.</p>
+              <h2>Основное</h2>
+              <p>Основные параметры ручной карточки улучшения.</p>
             </div>
-            <span className={styles.counter}>Шанс по весу: {calculateUpgradeCardChancePercent(draft, cards, editingId).toFixed(1)}%</span>
           </div>
-
           <div className={styles.manualFormGrid}>
             <label className={styles.field}>
               <span>ID</span>
@@ -740,22 +766,31 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             </label>
             <label className={styles.field}>
               <span>Цвет карточки</span>
-              <EditorColorInput value={draft.color ?? '#64748b'} onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))} />
+              <div className={styles.colorRow}>
+                <EditorColorInput
+                  value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color : '#64748b'}
+                  onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+                />
+                <EditorInput
+                  value={draft.color ?? ''}
+                  aria-invalid={Boolean(validation.errors.color)}
+                  onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+                  placeholder="#64748b"
+                  spellCheck={false}
+                />
+              </div>
               {validation.errors.color && <small className={styles.fieldError}>{validation.errors.color}</small>}
-            </label>
-            <label className={styles.field}>
-              <span>Изображение</span>
-              <span className={styles.fileButton}>Выбрать файл<EditorFileInput accept="image/*" mode="overlay" onChange={handleCardImageUpload} /></span>
-              {draft.image && <small>{draft.image.name}</small>}
             </label>
             <label className={`${styles.field} ${styles.fullWidth}`}>
               <span>Описание</span>
               <EditorTextarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
             </label>
           </div>
+        </section>
 
+        <section className={styles.formSection}>
           <div className={styles.effectsHeader}>
-            <div><h3>Параметры карточки</h3><p>Можно добавить один или несколько параметров.</p></div>
+            <div><h2>Параметры карточки</h2><p>Можно добавить один или несколько параметров.</p></div>
             <button className={styles.toolbarButton} type="button" onClick={addManualEffect}>+ Добавить параметр</button>
           </div>
           {validation.errors.effects && <p className={styles.fieldError}>{validation.errors.effects}</p>}
@@ -795,22 +830,13 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
               );
             })}
           </div>
-
-          <div className={styles.formActions}>
-            <button className={styles.primaryButton} type="button" disabled={!validation.valid} onClick={saveManualCard}>Сохранить карточку</button>
-            {isCreating ? (
-              <button className={styles.toolbarButton} type="button" onClick={cancelCreate}>Отмена</button>
-            ) : (
-              <button className={styles.dangerButton} type="button" onClick={removeManualCard}>Удалить карточку</button>
-            )}
-          </div>
         </section>
       </section>
-    </>
+    </section>
   );
 
   const renderGenerator = () => (
-    <>
+    <div className={styles.generatorPanel}>
       <section className={styles.hero}>
         <span className={styles.kicker}>Генератор</span>
         <h1>Правила генерации карточек</h1>
@@ -843,41 +869,54 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             <span>Количество карточек в предпросмотре</span>
             <EditorInput type="number" min="1" max="50" value={config.previewCardCount} onChange={(event) => patchConfig((next) => { next.previewCardCount = Math.min(50, Math.max(1, Math.floor(numericValue(event.target.value, 1)))); })} />
           </label>
-          <div className={styles.parameterCountCard}>
-            <div><strong>Количество параметров в одной карточке</strong><small>Генератор выберет случайное количество от MIN до MAX. Все параметры одной карточки относятся к одной способности.</small></div>
-            <label className={styles.field}>
-              <span>MIN</span>
-              <EditorInput type="number" min="1" max="10" step="1" value={config.minParametersPerCard} onChange={(event) => patchConfig((next) => {
-                const value = Math.min(10, Math.max(1, Math.floor(numericValue(event.target.value, 1))));
-                next.minParametersPerCard = value;
-                if (next.maxParametersPerCard < value) next.maxParametersPerCard = value;
-              })} />
-            </label>
-            <label className={styles.field}>
-              <span>MAX</span>
-              <EditorInput type="number" min={config.minParametersPerCard} max="10" step="1" value={config.maxParametersPerCard} onChange={(event) => patchConfig((next) => {
-                next.maxParametersPerCard = Math.min(10, Math.max(next.minParametersPerCard, Math.floor(numericValue(event.target.value, next.minParametersPerCard))));
-              })} />
-            </label>
-          </div>
         </div>
       </section>
 
       <section className={styles.formSection}>
-        <div className={styles.sectionHeader}><div><h2>Шансы редкости</h2><p>Редкость выбирается по весам. Рядом показан расчётный процент.</p></div></div>
+        <div className={styles.sectionHeader}>
+          <div>
+            <h2>Редкости и количество параметров</h2>
+            <p>Для каждой редкости задаются собственный вес и диапазон количества параметров в одной карточке.</p>
+          </div>
+        </div>
         <div className={styles.rarityGrid}>
-          {RARITIES.map((rarity) => (
-            <label className={styles.rarityCard} key={rarity}>
-              <span>{RARITY_LABELS[rarity]}</span>
-              <EditorInput type="number" min="0" step="1" value={config.rarityWeights[rarity]} onChange={(event) => patchConfig((next) => { next.rarityWeights[rarity] = Math.max(0, numericValue(event.target.value)); })} />
-              <small>≈ {rarityChance(config, rarity).toFixed(1)}%</small>
-            </label>
-          ))}
+          {RARITIES.map((rarity) => {
+            const countRange = config.parametersPerCard[rarity];
+            return (
+              <div className={styles.rarityCard} key={rarity}>
+                <div className={styles.rarityHeader}>
+                  <strong>{RARITY_LABELS[rarity]}</strong>
+                  <small>≈ {rarityChance(config, rarity).toFixed(1)}%</small>
+                </div>
+                <label className={styles.field}>
+                  <span>Вес редкости</span>
+                  <EditorInput type="number" min="0" step="1" value={config.rarityWeights[rarity]} onChange={(event) => patchConfig((next) => { next.rarityWeights[rarity] = Math.max(0, numericValue(event.target.value)); })} />
+                </label>
+                <div className={styles.countRange}>
+                  <label className={styles.field}>
+                    <span>Минимум параметров</span>
+                    <EditorInput type="number" min="1" max="10" step="1" value={countRange.min} onChange={(event) => patchConfig((next) => {
+                      const value = Math.min(10, Math.max(1, Math.floor(numericValue(event.target.value, 1))));
+                      next.parametersPerCard[rarity].min = value;
+                      if (next.parametersPerCard[rarity].max < value) next.parametersPerCard[rarity].max = value;
+                    })} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Максимум параметров</span>
+                    <EditorInput type="number" min={countRange.min} max="10" step="1" value={countRange.max} onChange={(event) => patchConfig((next) => {
+                      const min = next.parametersPerCard[rarity].min;
+                      next.parametersPerCard[rarity].max = Math.min(10, Math.max(min, Math.floor(numericValue(event.target.value, min))));
+                    })} />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       <section className={styles.rangeNotice}>
-        <strong>Где задаются MIN / MAX / STEP?</strong>
+        <strong>Где задаются минимум / максимум / шаг?</strong>
         <span>Откройте нужный параметр ниже. Для каждого числового параметра внутри есть отдельная таблица диапазонов по каждой редкости.</span>
       </section>
 
@@ -899,7 +938,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                       <span className={styles.parameterTitle}>
                         <strong>{option.label}</strong>
                         <small>{option.type}</small>
-                        {(rule.kind === 'number' || rule.kind === 'add-effect') && <em>Настройка MIN / MAX / STEP внутри</em>}
+                        {(rule.kind === 'number' || rule.kind === 'add-effect') && <em>Настройка минимума / максимума / шага внутри</em>}
                       </span>
                       <label className={styles.weightField} onClick={(event) => event.stopPropagation()}>
                         <span>Вес</span>
@@ -938,22 +977,22 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           </div>
         )}
       </section>
-    </>
+    </div>
   );
 
   return (
     <main className={styles.screen}>
       <header className={styles.topbar}>
         <button className={styles.toolbarButton} type="button" onClick={onBackToMain}>Главное меню</button>
-        <button className={styles.toolbarButton} type="button" onClick={onBackToEditors}>Редакторы</button>
         <strong>Редактор карточек улучшений</strong>
+        <button className={styles.toolbarButton} type="button" onClick={onBackToEditors}>Все редакторы</button>
       </header>
 
-      <div className={styles.content}>
-        <nav className={styles.tabs}>
-          <button className={activeTab === 'cards' ? styles.tabActive : styles.tab} type="button" onClick={() => setActiveTab('cards')}>Карточки вручную ({cards.length})</button>
-          <button className={activeTab === 'generator' ? styles.tabActive : styles.tab} type="button" onClick={() => setActiveTab('generator')}>Правила генерации</button>
-        </nav>
+      <nav className={styles.tabs}>
+        <button className={activeTab === 'cards' ? styles.tabActive : styles.tab} type="button" onClick={() => setActiveTab('cards')}>Карточки ({cards.length})</button>
+        <button className={activeTab === 'generator' ? styles.tabActive : styles.tab} type="button" onClick={() => setActiveTab('generator')}>Правила генерации</button>
+      </nav>
+      <div className={styles.workspace}>
         {activeTab === 'cards' ? renderManualCards() : renderGenerator()}
       </div>
     </main>

@@ -113,4 +113,13 @@ describe('boardLogic', () => {
       expect(hasPossibleMove(grid)).toBe(true);
     }
   });
+
+  it('generates a playable 4 by 6 board for compact screens', () => {
+    const grid = generatePlayableGrid(TILE_KINDS, Math.random, 4, 6);
+
+    expect(grid).toHaveLength(4);
+    expect(grid.every((row) => row.length === 6)).toBe(true);
+    expect(findMatchRuns(grid)).toHaveLength(0);
+    expect(hasPossibleMove(grid)).toBe(true);
+  });
 });

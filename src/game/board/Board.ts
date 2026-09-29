@@ -23,6 +23,8 @@ export interface BoardSnapshot {
 
 interface BoardOptions {
   tileKinds: TileKind[];
+  rows?: number;
+  columns?: number;
   onCharge: (kind: TileKind, amount: number) => void;
   onAutoShuffle?: () => void;
   wait?: (ms: number) => Promise<void>;
@@ -38,6 +40,8 @@ export class Board {
   private rollbackSwap: { from: GridPoint; to: GridPoint } | null = null;
   private readonly listeners = new Set<() => void>();
   private readonly tileKinds: TileKind[];
+  private readonly rows: number;
+  private readonly columns: number;
   private readonly onCharge: BoardOptions['onCharge'];
   private readonly onAutoShuffle?: BoardOptions['onAutoShuffle'];
   private readonly wait: (ms: number) => Promise<void>;
@@ -52,6 +56,8 @@ export class Board {
 
   constructor(options: BoardOptions) {
     this.tileKinds = [...options.tileKinds];
+    this.rows = Math.max(1, Math.floor(options.rows ?? BOARD_SIZE));
+    this.columns = Math.max(1, Math.floor(options.columns ?? BOARD_SIZE));
     this.onCharge = options.onCharge;
     this.onAutoShuffle = options.onAutoShuffle;
     this.wait = options.wait ?? ((ms) => new Promise<void>((resolve) => window.setTimeout(resolve, ms)));
@@ -71,7 +77,7 @@ export class Board {
     this.locked = false;
     this.fallDistances = null;
     this.rollbackSwap = null;
-    this.grid = generatePlayableGrid(this.tileKinds);
+    this.grid = generatePlayableGrid(this.tileKinds, Math.random, this.rows, this.columns);
     this.emit();
   }
 
@@ -146,7 +152,7 @@ export class Board {
     }
 
     if (!hasPossibleMove(this.grid)) {
-      this.grid = generatePlayableGrid(this.tileKinds);
+      this.grid = generatePlayableGrid(this.tileKinds, Math.random, this.rows, this.columns);
       this.onAutoShuffle?.();
     }
 
@@ -179,7 +185,7 @@ export class Board {
   }
 
   private isInside(point: GridPoint) {
-    return point.row >= 0 && point.row < BOARD_SIZE && point.col >= 0 && point.col < BOARD_SIZE;
+    return point.row >= 0 && point.row < this.rows && point.col >= 0 && point.col < this.columns;
   }
 
   private awardCharges(runs: MatchRun[]) {

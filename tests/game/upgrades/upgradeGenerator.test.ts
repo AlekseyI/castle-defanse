@@ -46,6 +46,17 @@ const manualCard: UpgradeCardDefinition = {
 };
 
 describe('upgradeGenerator', () => {
+  it('uses the configured default parameter-count range for each rarity', () => {
+    const config = cloneUpgradeGenerationConfig();
+
+    expect(config.parametersPerCard).toEqual({
+      common: { min: 1, max: 2 },
+      rare: { min: 2, max: 3 },
+      epic: { min: 3, max: 4 },
+      legendary: { min: 4, max: 5 },
+    });
+  });
+
   it('uses only parameters enabled both globally and for the ability', () => {
     const config = cloneUpgradeGenerationConfig();
     only(config, 'ability-damage-flat', 'ability-damage-percent');
@@ -85,8 +96,7 @@ describe('upgradeGenerator', () => {
   it('generates multiple distinct parameters in one card within configured bounds', () => {
     const config = cloneUpgradeGenerationConfig();
     only(config, 'ability-damage-flat', 'ability-damage-percent');
-    config.minParametersPerCard = 2;
-    config.maxParametersPerCard = 2;
+    config.parametersPerCard.common = { min: 2, max: 2 };
 
     const result = generateUpgradeChoices(config, [fire], [], {}, 1, 5, () => 0);
 
@@ -102,10 +112,25 @@ describe('upgradeGenerator', () => {
   it('does not create a card when an ability has fewer eligible parameters than configured minimum', () => {
     const config = cloneUpgradeGenerationConfig();
     only(config, 'ability-damage-flat');
-    config.minParametersPerCard = 2;
-    config.maxParametersPerCard = 3;
+    config.parametersPerCard.common = { min: 2, max: 3 };
 
     expect(generateUpgradeChoices(config, [fire], [], {}, 1, 5, () => 0)).toEqual([]);
+  });
+
+  it('uses parameter-count bounds configured separately for every rarity', () => {
+    for (const rarity of ['common', 'rare', 'epic', 'legendary'] as const) {
+      const config = cloneUpgradeGenerationConfig();
+      only(config, 'ability-damage-flat', 'ability-damage-percent');
+      config.rarityWeights = { common: 0, rare: 0, epic: 0, legendary: 0 };
+      config.rarityWeights[rarity] = 100;
+      config.parametersPerCard[rarity] = { min: 2, max: 2 };
+
+      const result = generateUpgradeChoices(config, [fire], [], {}, 1, 5, () => 0);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].rarity).toBe(rarity);
+      expect(result[0].effects).toHaveLength(2);
+    }
   });
 
   it('uses the stable receive key for a one-parameter generated card', () => {

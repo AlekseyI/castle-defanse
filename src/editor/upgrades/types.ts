@@ -170,6 +170,11 @@ export interface UpgradeNumberRange {
   step: number;
 }
 
+export interface UpgradeParameterCountRange {
+  min: number;
+  max: number;
+}
+
 export type UpgradeRarityRanges = Record<UpgradeRarity, UpgradeNumberRange>;
 
 interface UpgradeGenerationRuleBase {
@@ -214,8 +219,7 @@ export type UpgradeParameterGenerationRule =
 export interface UpgradeGenerationConfig {
   enabled: boolean;
   previewCardCount: number;
-  minParametersPerCard: number;
-  maxParametersPerCard: number;
+  parametersPerCard: Record<UpgradeRarity, UpgradeParameterCountRange>;
   allowDuplicateParameters: boolean;
   allowSameAbility: boolean;
   rarityWeights: Record<UpgradeRarity, number>;

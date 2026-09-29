@@ -122,18 +122,23 @@ export function collapseAndRefill(
 export function generatePlayableGrid(
   tileKinds: TileKind[],
   random: () => number = Math.random,
+  rowCount = BOARD_SIZE,
+  colCount = BOARD_SIZE,
 ): Cell[][] {
+  const rows = Math.max(1, Math.floor(rowCount));
+  const columns = Math.max(1, Math.floor(colCount));
+
   if (tileKinds.length < 3) {
-    return Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => null));
+    return Array.from({ length: rows }, () => Array.from({ length: columns }, () => null));
   }
 
   for (let attempt = 0; attempt < 200; attempt += 1) {
-    const candidate: Cell[][] = Array.from({ length: BOARD_SIZE }, () =>
-      Array.from({ length: BOARD_SIZE }, () => null),
+    const candidate: Cell[][] = Array.from({ length: rows }, () =>
+      Array.from({ length: columns }, () => null),
     );
 
-    for (let row = 0; row < BOARD_SIZE; row += 1) {
-      for (let col = 0; col < BOARD_SIZE; col += 1) {
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < columns; col += 1) {
         const blocked = new Set<TileKind>();
 
         if (col >= 2 && candidate[row][col - 1] === candidate[row][col - 2]) {

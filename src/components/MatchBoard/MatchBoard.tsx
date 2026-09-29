@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import type { AbilityDefinition } from '../../editor/abilities/types';
-import { BOARD_SIZE } from '../../game/config';
+import { BOARD_SIZE, getBoardDimensions } from '../../game/config';
 import { BOARD_FALL_ANIMATION_MS, BOARD_SWAP_ANIMATION_MS, Board } from '../../game/board/Board';
 import { areAdjacent } from '../../game/board/boardLogic';
 import type { GridPoint, TileKind } from '../../game/types';
@@ -47,14 +47,20 @@ function samePoint(a: GridPoint, b: GridPoint) {
   return a.row === b.row && a.col === b.col;
 }
 
-function getSwipeTarget(from: GridPoint, dx: number, dy: number): GridPoint | null {
+function getSwipeTarget(
+  from: GridPoint,
+  dx: number,
+  dy: number,
+  rowCount: number,
+  colCount: number,
+): GridPoint | null {
   if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return null;
 
   const target = Math.abs(dx) >= Math.abs(dy)
     ? { row: from.row, col: from.col + (dx > 0 ? 1 : -1) }
     : { row: from.row + (dy > 0 ? 1 : -1), col: from.col };
 
-  if (target.row < 0 || target.row >= BOARD_SIZE || target.col < 0 || target.col >= BOARD_SIZE) {
+  if (target.row < 0 || target.row >= rowCount || target.col < 0 || target.col >= colCount) {
     return null;
   }
 
@@ -94,6 +100,11 @@ function getAbilityColor(ability: AbilityDefinition): string {
   return /^#[0-9a-fA-F]{6}$/.test(ability.color) ? ability.color : '#64748b';
 }
 
+function getCurrentBoardDimensions() {
+  if (typeof window === 'undefined') return { rows: BOARD_SIZE, columns: BOARD_SIZE };
+  return getBoardDimensions(window.innerWidth, window.innerHeight);
+}
+
 export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBoardProps) {
   const phase = useGameStore((state) => state.phase);
   const setBoardBusy = useGameStore((state) => state.setBoardBusy);
@@ -102,6 +113,7 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
   const suppressClickUntil = useRef(0);
   const swapTimer = useRef<number | null>(null);
   const [swapAnimation, setSwapAnimation] = useState<SwapAnimation | null>(null);
+  const [boardDimensions, setBoardDimensions] = useState(getCurrentBoardDimensions);
   const abilities = useMemo(() => loadAbilities(), []);
   const abilityById = useMemo(
     () => new Map(abilities.map((ability) => [ability.id, ability])),
@@ -109,11 +121,43 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
   );
   const abilityIds = useMemo(() => abilities.map((ability) => ability.id), [abilities]);
   const board = useMemo(
-    () => new Board({ tileKinds: abilityIds, onCharge: onMatch, onAutoShuffle }),
-    [abilityIds, onAutoShuffle, onMatch],
+    () => new Board({
+      tileKinds: abilityIds,
+      rows: boardDimensions.rows,
+      columns: boardDimensions.columns,
+      onCharge: onMatch,
+      onAutoShuffle,
+    }),
+    [abilityIds, boardDimensions.columns, boardDimensions.rows, onAutoShuffle, onMatch],
   );
   const snapshot = useSyncExternalStore(board.subscribe, board.getSnapshot, board.getSnapshot);
   const inactive = disabled || phase !== 'playing' || abilities.length === 0;
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      const next = getCurrentBoardDimensions();
+      setBoardDimensions((current) => (
+        current.rows === next.rows && current.columns === next.columns ? current : next
+      ));
+    };
+
+    window.addEventListener('resize', updateDimensions);
+    window.addEventListener('orientationchange', updateDimensions);
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      window.removeEventListener('orientationchange', updateDimensions);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (swapTimer.current !== null) {
+      window.clearTimeout(swapTimer.current);
+      swapTimer.current = null;
+    }
+    swipeStart.current = null;
+    setSwapAnimation(null);
+    setBoardBusy(false);
+  }, [boardDimensions.columns, boardDimensions.rows, setBoardBusy]);
 
   useEffect(() => () => {
     if (swapTimer.current !== null) window.clearTimeout(swapTimer.current);
@@ -170,12 +214,18 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
-    const target = getSwipeTarget(start.point, event.clientX - start.x, event.clientY - start.y);
+    const target = getSwipeTarget(
+      start.point,
+      event.clientX - start.x,
+      event.clientY - start.y,
+      boardDimensions.rows,
+      boardDimensions.columns,
+    );
     if (!target) return;
 
     suppressClickUntil.current = Date.now() + 400;
     animateSwap(start.point, target);
-  }, [animateSwap]);
+  }, [animateSwap, boardDimensions.columns, boardDimensions.rows]);
 
   const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     if (swipeStart.current?.pointerId === event.pointerId) swipeStart.current = null;
@@ -187,9 +237,10 @@ export function MatchBoard({ disabled = false, onMatch, onAutoShuffle }: MatchBo
   return (
     <div className={styles.wrap}>
       <div
-        className={styles.board}
+        className={[styles.board, boardDimensions.rows < boardDimensions.columns ? styles.compactBoard : ''].filter(Boolean).join(' ')}
         style={{
-          '--board-size': BOARD_SIZE,
+          '--board-columns': boardDimensions.columns,
+          '--board-rows': boardDimensions.rows,
           '--fall-duration': `${BOARD_FALL_ANIMATION_MS}ms`,
         } as CSSProperties}
         aria-disabled={inactive || snapshot.locked}

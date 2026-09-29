@@ -47,8 +47,12 @@ function addEffectRule(
 export const DEFAULT_UPGRADE_GENERATION_CONFIG: UpgradeGenerationConfig = {
   enabled: true,
   previewCardCount: 10,
-  minParametersPerCard: 1,
-  maxParametersPerCard: 1,
+  parametersPerCard: {
+    common: { min: 1, max: 2 },
+    rare: { min: 2, max: 3 },
+    epic: { min: 3, max: 4 },
+    legendary: { min: 4, max: 5 },
+  },
   allowDuplicateParameters: false,
   allowSameAbility: true,
   rarityWeights: {

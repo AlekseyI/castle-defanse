@@ -5,15 +5,16 @@ import type {
   UpgradeEffectType,
   UpgradeGenerationConfig,
   UpgradeNumberRange,
+  UpgradeParameterCountRange,
   UpgradeParameterGenerationRule,
   UpgradeRarity,
   UpgradeRarityRanges,
 } from './types';
 import { UPGRADE_EFFECT_TYPES } from './types';
 
-const GENERATION_STORAGE_KEY = 'game.upgrade-generation.v2';
+const GENERATION_STORAGE_KEY = 'game.upgrade-generation.v4';
 const CARDS_STORAGE_KEY = 'game.upgrade-cards.v1';
-const LEGACY_GENERATION_STORAGE_KEY = 'game.upgrade-generation.v1';
+const LEGACY_GENERATION_STORAGE_KEYS = ['game.upgrade-generation.v1', 'game.upgrade-generation.v2', 'game.upgrade-generation.v3'];
 const LEGACY_CARDS_STORAGE_KEY = 'game.upgrades.v3';
 const RARITIES: UpgradeRarity[] = ['common', 'rare', 'epic', 'legendary'];
 const TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle']);
@@ -21,7 +22,7 @@ const EFFECT_TYPES = new Set<string>(UPGRADE_EFFECT_TYPES);
 
 function removeLegacyStorage(): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(LEGACY_GENERATION_STORAGE_KEY);
+  LEGACY_GENERATION_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
   window.localStorage.removeItem(LEGACY_CARDS_STORAGE_KEY);
 }
 
@@ -47,6 +48,25 @@ function isRanges(value: unknown): value is UpgradeRarityRanges {
   return (
     Object.keys(ranges).length === RARITIES.length &&
     RARITIES.every((rarity) => isRange(ranges[rarity]))
+  );
+}
+
+function isParameterCountRange(value: unknown): value is UpgradeParameterCountRange {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const range = value as Record<string, unknown>;
+  return (
+    Object.keys(range).length === 2 &&
+    isFiniteNumber(range.min) && Number.isInteger(range.min) && range.min >= 1 &&
+    isFiniteNumber(range.max) && Number.isInteger(range.max) && range.max >= range.min
+  );
+}
+
+function isParameterCountRanges(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const ranges = value as Record<string, unknown>;
+  return (
+    Object.keys(ranges).length === RARITIES.length &&
+    RARITIES.every((rarity) => isParameterCountRange(ranges[rarity]))
   );
 }
 
@@ -108,8 +128,7 @@ function isConfig(value: unknown): value is UpgradeGenerationConfig {
   if (
     typeof config.enabled !== 'boolean' ||
     !isFiniteNumber(config.previewCardCount) || !Number.isInteger(config.previewCardCount) || config.previewCardCount < 1 ||
-    !isFiniteNumber(config.minParametersPerCard) || !Number.isInteger(config.minParametersPerCard) || config.minParametersPerCard < 1 ||
-    !isFiniteNumber(config.maxParametersPerCard) || !Number.isInteger(config.maxParametersPerCard) || config.maxParametersPerCard < config.minParametersPerCard ||
+    !isParameterCountRanges(config.parametersPerCard) ||
     typeof config.allowDuplicateParameters !== 'boolean' ||
     typeof config.allowSameAbility !== 'boolean' ||
     !config.rarityWeights || typeof config.rarityWeights !== 'object' || Array.isArray(config.rarityWeights) ||

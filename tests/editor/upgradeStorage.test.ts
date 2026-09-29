@@ -45,8 +45,10 @@ describe('upgradeStorage', () => {
     const config = cloneUpgradeGenerationConfig();
     config.enabled = false;
     config.previewCardCount = 7;
-    config.minParametersPerCard = 2;
-    config.maxParametersPerCard = 4;
+    config.parametersPerCard.common = { min: 1, max: 2 };
+    config.parametersPerCard.rare = { min: 2, max: 3 };
+    config.parametersPerCard.epic = { min: 3, max: 4 };
+    config.parametersPerCard.legendary = { min: 4, max: 5 };
     config.rarityWeights.legendary = 25;
     const rule = config.parameters['ability-damage-percent'];
     if (rule.kind === 'number') rule.ranges.epic = { min: 33, max: 44, step: 1 };
@@ -69,24 +71,33 @@ describe('upgradeStorage', () => {
     const values = installLocalStorage();
     values.set('game.upgrades.v3', JSON.stringify([{ id: 'old-card' }]));
     values.set('game.upgrade-generation.v1', JSON.stringify({ enabled: true }));
+    values.set('game.upgrade-generation.v2', JSON.stringify({ enabled: true }));
+    values.set('game.upgrade-generation.v3', JSON.stringify({
+      ...cloneUpgradeGenerationConfig(),
+      parametersPerCard: {
+        common: { min: 1, max: 1 },
+        rare: { min: 1, max: 1 },
+        epic: { min: 1, max: 1 },
+        legendary: { min: 1, max: 1 },
+      },
+    }));
 
-    expect(loadUpgradeCards()).toEqual([]);
     expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
+    expect(loadUpgradeCards()).toEqual([]);
     expect(values.has('game.upgrades.v3')).toBe(false);
     expect(values.has('game.upgrade-generation.v1')).toBe(false);
+    expect(values.has('game.upgrade-generation.v2')).toBe(false);
+    expect(values.has('game.upgrade-generation.v3')).toBe(false);
   });
 
-  it('rejects malformed generation json instead of migrating it', () => {
+  it('rejects the previous generation json shape instead of migrating it', () => {
     const values = installLocalStorage();
-    values.set('game.upgrade-generation.v2', JSON.stringify({
-      enabled: true,
-      previewCardCount: 10,
+    const legacy = { ...cloneUpgradeGenerationConfig() } as Record<string, unknown>;
+    delete legacy.parametersPerCard;
+    values.set('game.upgrade-generation.v4', JSON.stringify({
+      ...legacy,
       minParametersPerCard: 1,
       maxParametersPerCard: 1,
-      allowDuplicateParameters: false,
-      allowSameAbility: true,
-      rarityWeights: { common: 100, rare: 50, epic: 20, legendary: 5 },
-      parameters: {},
     }));
 
     expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);

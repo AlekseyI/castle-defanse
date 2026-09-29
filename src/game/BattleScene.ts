@@ -48,6 +48,8 @@ interface Enemy {
   hp: number;
   maxHp: number;
   speed: number;
+  speedScale: number;
+  spawnY: number;
   damage: number;
   coinsOnDeath: number;
   damageProtection?: UnitDefinition['damageProtection'];
@@ -94,7 +96,6 @@ export class BattleScene extends Container {
   private readonly upgradeGenerationConfig: UpgradeGenerationConfig;
   private readonly manualUpgradeCards: UpgradeCardDefinition[];
   private layoutWidth = 0;
-  private enemySpeedScale = 1;
 
   private castleY = 250;
   private battleHeight = 340;
@@ -349,7 +350,9 @@ export class BattleScene extends Container {
       ? this.app.screen.width / 2
       : 34 + Math.random() * Math.max(40, this.app.screen.width - 68);
     const visualBottomExtent = Math.max(radius, (isBoss ? 37 : 24) + 6);
-    root.y = getEnemySpawnY(visualBottomExtent);
+    const spawnY = getEnemySpawnY(visualBottomExtent);
+    const speedScale = getEnemySpeedScale(Math.max(0, this.castleY - 30 - spawnY));
+    root.y = spawnY;
 
     this.enemiesLayer.addChild(root);
     const enemy: Enemy = {
@@ -359,6 +362,8 @@ export class BattleScene extends Container {
       hp,
       maxHp: hp,
       speed,
+      speedScale,
+      spawnY,
       damage,
       coinsOnDeath,
       damageProtection,
@@ -403,7 +408,7 @@ export class BattleScene extends Container {
       if (enemy.frozenFor <= 0) enemy.slowPercent = 0;
       const speedMultiplier = enemy.frozenFor > 0 ? Math.max(0, 1 - enemy.slowPercent / 100) : 1;
       enemy.body.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
-      enemy.root.y += enemy.speed * this.enemySpeedScale * speedMultiplier * dt;
+      enemy.root.y += enemy.speed * enemy.speedScale * speedMultiplier * dt;
 
       if (enemy.root.y >= this.castleY - 30) {
         useGameStore.getState().damageCastle(enemy.damage);
@@ -824,8 +829,6 @@ export class BattleScene extends Container {
     const height = this.app.screen.height;
     const previousWidth = this.layoutWidth || width;
     const previousCastleY = this.castleY;
-    const compact = width <= 600 || height <= 360;
-
     const backgroundColor = Number.parseInt(this.map.background.color.slice(1), 16);
     this.bg.clear().rect(0, 0, width, height).fill({
       color: Number.isFinite(backgroundColor) ? backgroundColor : 0x0b1020,
@@ -834,8 +837,6 @@ export class BattleScene extends Container {
 
     this.battleHeight = Math.max(1, height);
     this.castleY = Math.max(82, height - 38);
-    const enemyPathLength = Math.max(0, this.castleY - 30 - 62);
-    this.enemySpeedScale = getEnemySpeedScale(enemyPathLength, compact);
     this.castle.position.set(width / 2, this.castleY);
 
     this.spellEffects.resize({
@@ -848,18 +849,19 @@ export class BattleScene extends Container {
     if (this.autoShuffleText) this.autoShuffleText.position.set(width / 2, Math.max(18, height - 14));
 
     if (this.enemies.length > 0) {
-      const laneTop = 18;
-      const previousLaneEnd = Math.max(laneTop + 1, previousCastleY - 30);
-      const nextLaneEnd = Math.max(laneTop + 1, this.castleY - 30);
+      const previousLaneEnd = previousCastleY - 30;
+      const nextLaneEnd = this.castleY - 30;
       const widthScale = previousWidth > 0 ? width / previousWidth : 1;
 
       for (const enemy of this.enemies) {
         const sidePadding = enemy.isBoss ? 34 : 24;
         enemy.root.x = Math.min(width - sidePadding, Math.max(sidePadding, enemy.root.x * widthScale));
-        if (enemy.root.y < 0) continue;
 
-        const progress = Math.max(0, Math.min(1, (enemy.root.y - laneTop) / (previousLaneEnd - laneTop)));
-        enemy.root.y = laneTop + progress * (nextLaneEnd - laneTop);
+        const previousPathLength = Math.max(1, previousLaneEnd - enemy.spawnY);
+        const nextPathLength = Math.max(0, nextLaneEnd - enemy.spawnY);
+        const progress = Math.max(0, Math.min(1, (enemy.root.y - enemy.spawnY) / previousPathLength));
+        enemy.root.y = enemy.spawnY + progress * nextPathLength;
+        enemy.speedScale = getEnemySpeedScale(nextPathLength);
       }
     }
 

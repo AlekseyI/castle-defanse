@@ -352,9 +352,13 @@ function availableCandidates(
   ));
 }
 
-function getParameterCountBounds(config: UpgradeGenerationConfig): { min: number; max: number } {
-  const min = Math.max(1, Math.floor(config.minParametersPerCard));
-  const max = Math.max(min, Math.floor(config.maxParametersPerCard));
+function getParameterCountBounds(
+  config: UpgradeGenerationConfig,
+  rarity: UpgradeRarity,
+): { min: number; max: number } {
+  const range = config.parametersPerCard[rarity];
+  const min = Math.max(1, Math.floor(range.min));
+  const max = Math.max(min, Math.floor(range.max));
   return { min, max };
 }
 
@@ -373,7 +377,7 @@ function createGeneratedCard(
   slot: number,
   random: () => number,
 ): { card: UpgradeCardDefinition; candidates: Candidate[] } | undefined {
-  const { min, max } = getParameterCountBounds(config);
+  const { min, max } = getParameterCountBounds(config, rarity);
   const byAbility = new Map<string, Candidate[]>();
   for (const candidate of available) {
     const current = byAbility.get(candidate.ability.id) ?? [];
@@ -468,7 +472,7 @@ export function generateUpgradeChoices(
     const availableRarities = RARITIES.filter((rarity) => {
       if (config.rarityWeights[rarity] <= 0) return false;
       const available = availableCandidates(candidates, rarity, damageSources, config, selectedAcrossCards);
-      const { min } = getParameterCountBounds(config);
+      const { min } = getParameterCountBounds(config, rarity);
       const abilityCounts = new Map<string, number>();
       for (const candidate of available) {
         abilityCounts.set(candidate.ability.id, (abilityCounts.get(candidate.ability.id) ?? 0) + 1);
