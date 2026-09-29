@@ -4,15 +4,17 @@ import { loadActiveMap } from '../editor/maps/mapStorage';
 import type { MapDefinition } from '../editor/maps/types';
 import type { AbilityDefinition, AbilityTarget, PeriodicDamageAbilityEffect, SlowAbilityEffect } from '../editor/abilities/types';
 import { loadUnits } from '../editor/units/unitStorage';
-import { loadUpgrades } from '../editor/upgrades/upgradeStorage';
-import type { UpgradeCardDefinition } from '../editor/upgrades/types';
+import { loadDamageSources } from '../editor/damageSources/damageSourceStorage';
+import type { DamageSource } from '../editor/damageSources/types';
+import { loadUpgradeCards, loadUpgradeGenerationConfig } from '../editor/upgrades/upgradeStorage';
+import type { UpgradeCardDefinition, UpgradeGenerationConfig } from '../editor/upgrades/types';
 import type { UnitDefinition } from '../editor/units/types';
 import type { TileKind } from './types';
 import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
 import { getRuntimeSpawnBlock, getRuntimeUnit, getRuntimeWave, getWaveBlockStep } from './waveLogic';
 import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
-import { generateUpgradeChoices } from './upgrades/upgradeGenerator';
+import { buildUpgradeChoices } from './upgrades/upgradeGenerator';
 import { applyAbilityRuntimeModifier } from './upgrades/upgradeCalculator';
 import {
   earnsBossUpgradeReward,
@@ -87,7 +89,10 @@ export class BattleScene extends Container {
   private readonly unitsById: Map<string, UnitDefinition>;
   private readonly map: MapDefinition;
   private readonly abilitiesById: Map<TileKind, AbilityDefinition>;
-  private readonly upgradeCards: UpgradeCardDefinition[];
+  private readonly abilities: AbilityDefinition[];
+  private readonly damageSources: DamageSource[];
+  private readonly upgradeGenerationConfig: UpgradeGenerationConfig;
+  private readonly manualUpgradeCards: UpgradeCardDefinition[];
   private layoutWidth = 0;
   private enemySpeedScale = 1;
 
@@ -113,8 +118,11 @@ export class BattleScene extends Container {
     this.unitsById = createUnitLookup(units);
     this.map = loadActiveMap();
     const abilities = loadAbilities();
+    this.abilities = abilities;
     this.abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
-    this.upgradeCards = loadUpgrades();
+    this.damageSources = loadDamageSources();
+    this.upgradeGenerationConfig = loadUpgradeGenerationConfig();
+    this.manualUpgradeCards = loadUpgradeCards();
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
     this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
@@ -250,8 +258,11 @@ export class BattleScene extends Container {
     this.bossUpgradeRewardEarned = false;
 
     if (shouldReward) {
-      const choices = generateUpgradeChoices(
-        this.upgradeCards,
+      const choices = buildUpgradeChoices(
+        this.upgradeGenerationConfig,
+        this.manualUpgradeCards,
+        this.abilities,
+        this.damageSources,
         state.upgradeCounts,
         effectiveReward.cardCount,
         this.map.upgradeSettings.maxCardReceives,
@@ -280,8 +291,11 @@ export class BattleScene extends Container {
     const state = useGameStore.getState();
     if (state.phase !== 'upgrade-selection' || state.upgradeChoices.length === 0) return;
 
-    const choices = generateUpgradeChoices(
-      this.upgradeCards,
+    const choices = buildUpgradeChoices(
+      this.upgradeGenerationConfig,
+      this.manualUpgradeCards,
+      this.abilities,
+      this.damageSources,
       state.upgradeCounts,
       state.upgradeChoices.length,
       state.upgradeMaxCardReceives,

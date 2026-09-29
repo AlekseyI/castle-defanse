@@ -125,7 +125,7 @@ export function UpgradeChoice({ onSelect, onRefresh, onDismiss }: UpgradeChoiceP
                     </li>
                   ))}
                 </ul>
-                <span className={styles.count}>Получено: {counts[card.id] ?? 0} / {maxCardReceives}</span>
+                <span className={styles.count}>Получено: {counts[card.receiveKey ?? card.id] ?? 0} / {maxCardReceives}</span>
               </div>
             </button>
           ))}

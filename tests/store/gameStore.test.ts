@@ -208,6 +208,26 @@ describe('gameStore upgrades', () => {
     expect(useGameStore.getState().dismissUpgradeSelection()).toBe(false);
   });
 
+  it('counts generated cards by receiveKey instead of their transient id', () => {
+    useGameStore.getState().reset(3, ['fire'], 1);
+    const first = {
+      id: 'generated:first',
+      receiveKey: 'fire:ability-damage-flat',
+      name: 'Первый',
+      description: '',
+      rarity: 'common' as const,
+      weight: 100,
+      effects: [{ type: 'ability-damage-flat' as const, abilityId: 'fire', value: 5 }],
+    };
+    const second = { ...first, id: 'generated:second', name: 'Второй' };
+
+    useGameStore.getState().openUpgradeSelection([first]);
+    expect(useGameStore.getState().selectUpgrade(first.id)).toBe(true);
+    useGameStore.getState().openUpgradeSelection([second]);
+    expect(useGameStore.getState().selectUpgrade(second.id)).toBe(false);
+    expect(useGameStore.getState().upgradeCounts['fire:ability-damage-flat']).toBe(1);
+  });
+
   it('does not allow selecting a card outside the current choices or beyond the map receive limit', () => {
     useGameStore.getState().reset(3, ['fire'], 1);
     const card = {

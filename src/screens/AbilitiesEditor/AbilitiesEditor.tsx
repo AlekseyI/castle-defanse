@@ -12,11 +12,7 @@ import {
   validateAbility,
 } from '../../editor/abilities/abilityLogic';
 import { loadAbilities, persistAbilities } from '../../editor/abilities/abilityStorage';
-import {
-  UPGRADE_EFFECT_OPTIONS,
-  removeUpgradeParametersFromCards,
-} from '../../editor/upgrades/upgradeLogic';
-import { loadUpgrades, persistUpgrades } from '../../editor/upgrades/upgradeStorage';
+import { UPGRADE_EFFECT_OPTIONS } from '../../editor/upgrades/upgradeLogic';
 import type { UpgradeEffectType } from '../../editor/upgrades/types';
 import type {
   AbilityDefinition,
@@ -151,18 +147,6 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
     const current = editingId ? abilities.find((ability) => ability.id === editingId) : undefined;
     if (current && JSON.stringify(current) === JSON.stringify(normalized)) return;
 
-    if (current) {
-      const disabledParameters = current.allowedUpgradeParameters.filter((parameter) => (
-        !normalized.allowedUpgradeParameters.includes(parameter)
-      ));
-      if (disabledParameters.length > 0) {
-        const impact = removeUpgradeParametersFromCards(loadUpgrades(), current.id, disabledParameters);
-        if (impact.changedCardCount > 0 || impact.deletedCardCount > 0) {
-          persistUpgrades(impact.cards);
-        }
-      }
-    }
-
     const next = saveAbility(abilities, normalized, editingId);
     updateAbilities(next);
     setSelectedId(normalized.id);
@@ -217,19 +201,6 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
           : [...current.allowedUpgradeParameters, parameter],
       }));
       return;
-    }
-
-    if (editingId) {
-      const impact = removeUpgradeParametersFromCards(loadUpgrades(), editingId, [parameter]);
-      if (impact.changedCardCount > 0 || impact.deletedCardCount > 0) {
-        const confirmed = window.confirm(
-          'Вы отключаете параметр, который используется в существующих карточках улучшений.\n\n' +
-          `Будет изменено карточек: ${impact.changedCardCount}\n` +
-          `Будет полностью удалено карточек: ${impact.deletedCardCount}\n\n` +
-          'Продолжить?',
-        );
-        if (!confirmed) return;
-      }
     }
 
     setDraft((current) => ({
@@ -520,7 +491,7 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
             </div>
 
             <div className={styles.formSection}>
-              <h2>Параметры улучшений</h2>
+              <h2>Параметры карточек улучшений</h2>
               <div className={styles.formGrid}>
                 <div className={`${styles.field} ${styles.fullRow}`}>
                   <span>Доступно в карточках улучшений</span>

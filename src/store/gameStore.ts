@@ -127,7 +127,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const card = state.upgradeChoices.find((choice) => choice.id === cardId);
     if (!card) return false;
 
-    const currentCount = state.upgradeCounts[card.id] ?? 0;
+    const receiveKey = card.receiveKey ?? card.id;
+    const currentCount = state.upgradeCounts[receiveKey] ?? 0;
     if (currentCount >= state.upgradeMaxCardReceives) return false;
 
     const abilityModifiers: AbilityRuntimeModifiers = structuredClone(state.abilityModifiers);
@@ -136,7 +137,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       upgradeCounts: {
         ...state.upgradeCounts,
-        [card.id]: currentCount + 1,
+        [receiveKey]: currentCount + 1,
       },
       abilityModifiers,
       upgradeChoices: [],

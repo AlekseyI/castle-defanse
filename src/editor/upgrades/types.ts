@@ -154,6 +154,7 @@ export interface UpgradeCardImage {
 
 export interface UpgradeCardDefinition {
   id: string;
+  receiveKey?: string;
   name: string;
   description: string;
   rarity: UpgradeRarity;
@@ -161,4 +162,62 @@ export interface UpgradeCardDefinition {
   effects: UpgradeEffect[];
   color?: string;
   image?: UpgradeCardImage;
+}
+
+export interface UpgradeNumberRange {
+  min: number;
+  max: number;
+  step: number;
+}
+
+export type UpgradeRarityRanges = Record<UpgradeRarity, UpgradeNumberRange>;
+
+interface UpgradeGenerationRuleBase {
+  enabled: boolean;
+  weight: number;
+}
+
+export interface UpgradeNumberGenerationRule extends UpgradeGenerationRuleBase {
+  kind: 'number';
+  ranges: UpgradeRarityRanges;
+}
+
+export interface UpgradeOptionGenerationRule extends UpgradeGenerationRuleBase {
+  kind: 'option';
+  values: string[];
+}
+
+export interface UpgradeAddedEffectGenerationSettings {
+  amount?: UpgradeRarityRanges;
+  chancePercent?: UpgradeRarityRanges;
+  duration?: UpgradeRarityRanges;
+  criticalChancePercent?: UpgradeRarityRanges;
+  criticalMultiplier?: UpgradeRarityRanges;
+  slowPercent?: UpgradeRarityRanges;
+  targetCount?: UpgradeRarityRanges;
+  areaHeightPercent?: UpgradeRarityRanges;
+  damageSourceIds?: string[];
+  visualColors?: string[];
+  targetTypes: AbilityTargetType[];
+}
+
+export interface UpgradeAddEffectGenerationRule extends UpgradeGenerationRuleBase {
+  kind: 'add-effect';
+  settings: UpgradeAddedEffectGenerationSettings;
+}
+
+export type UpgradeParameterGenerationRule =
+  | UpgradeNumberGenerationRule
+  | UpgradeOptionGenerationRule
+  | UpgradeAddEffectGenerationRule;
+
+export interface UpgradeGenerationConfig {
+  enabled: boolean;
+  previewCardCount: number;
+  minParametersPerCard: number;
+  maxParametersPerCard: number;
+  allowDuplicateParameters: boolean;
+  allowSameAbility: boolean;
+  rarityWeights: Record<UpgradeRarity, number>;
+  parameters: Record<UpgradeEffectType, UpgradeParameterGenerationRule>;
 }

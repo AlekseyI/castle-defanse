@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_UPGRADES } from '../../src/editor/upgrades/defaultUpgrades';
-import { loadUpgrades, persistUpgrades } from '../../src/editor/upgrades/upgradeStorage';
+import {
+  DEFAULT_UPGRADE_GENERATION_CONFIG,
+  cloneUpgradeGenerationConfig,
+} from '../../src/editor/upgrades/defaultUpgradeGeneration';
 import type { UpgradeCardDefinition } from '../../src/editor/upgrades/types';
+import {
+  loadUpgradeCards,
+  loadUpgradeGenerationConfig,
+  persistUpgradeCards,
+  persistUpgradeGenerationConfig,
+} from '../../src/editor/upgrades/upgradeStorage';
 
 function installLocalStorage() {
   const values = new Map<string, string>();
@@ -9,136 +17,85 @@ function installLocalStorage() {
     localStorage: {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
     },
   });
+  return values;
 }
+
+const manualCard: UpgradeCardDefinition = {
+  id: 'manual-fire',
+  name: 'Ручная карточка',
+  description: 'Проверка ручного хранения.',
+  rarity: 'rare',
+  weight: 50,
+  effects: [
+    { type: 'ability-damage-flat', abilityId: 'fire', value: 10 },
+    { type: 'ability-damage-percent', abilityId: 'fire', value: 15 },
+  ],
+  color: '#ff0000',
+  image: undefined,
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
-const card: UpgradeCardDefinition = {
-  id: 'fire_damage',
-  name: 'Адское пламя',
-  description: '+20% основного урона',
-  rarity: 'common',
-  weight: 100,
-  effects: [{ type: 'ability-damage-percent', abilityId: 'fire', value: 20 }],
-};
-
 describe('upgradeStorage', () => {
-  it('persists and loads the current card format', () => {
+  it('persists and loads generation rules in the new format', () => {
     installLocalStorage();
-    persistUpgrades([card]);
-    expect(loadUpgrades()).toEqual([card]);
+    const config = cloneUpgradeGenerationConfig();
+    config.enabled = false;
+    config.previewCardCount = 7;
+    config.minParametersPerCard = 2;
+    config.maxParametersPerCard = 4;
+    config.rarityWeights.legendary = 25;
+    const rule = config.parameters['ability-damage-percent'];
+    if (rule.kind === 'number') rule.ranges.epic = { min: 33, max: 44, step: 1 };
+
+    persistUpgradeGenerationConfig(config);
+
+    expect(loadUpgradeGenerationConfig()).toEqual(config);
   });
 
-  it('persists added effects with every parameter stored explicitly', () => {
+  it('persists manual cards separately from generator settings', () => {
     installLocalStorage();
-    const withAddedEffect: UpgradeCardDefinition = {
-      ...card,
-      id: 'ignite',
-      effects: [
-        {
-          type: 'ability-add-periodic-damage',
-          abilityId: 'bolt',
-          value: {
-            chancePercent: 0,
-            amount: 20,
-            duration: 0,
-            criticalChancePercent: 0,
-            criticalMultiplier: 0,
-            visualColor: '#000000',
-            target: {
-              type: 'nearest-enemies',
-              count: 1,
-              areaHeightPercent: 0,
-            },
-          },
-        },
-      ],
-    };
 
-    persistUpgrades([withAddedEffect]);
-    expect(loadUpgrades()).toEqual([withAddedEffect]);
+    persistUpgradeCards([manualCard]);
+
+    expect(loadUpgradeCards()).toEqual([manualCard]);
+    expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
   });
 
-  it('persists and loads negative numeric trade-off effects', () => {
-    installLocalStorage();
-    const tradeOff: UpgradeCardDefinition = {
-      ...card,
-      id: 'cursed_power',
-      effects: [
-        { type: 'ability-damage-percent', abilityId: 'fire', value: -35 },
-        { type: 'ability-damage-target-count', abilityId: 'fire', value: -1 },
-        { type: 'ability-periodic-duration-flat', abilityId: 'fire', value: -1.5 },
-      ],
-    };
+  it('does not use legacy card or generator json', () => {
+    const values = installLocalStorage();
+    values.set('game.upgrades.v3', JSON.stringify([{ id: 'old-card' }]));
+    values.set('game.upgrade-generation.v1', JSON.stringify({ enabled: true }));
 
-    persistUpgrades([tradeOff]);
-    expect(loadUpgrades()).toEqual([tradeOff]);
+    expect(loadUpgradeCards()).toEqual([]);
+    expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
+    expect(values.has('game.upgrades.v3')).toBe(false);
+    expect(values.has('game.upgrade-generation.v1')).toBe(false);
   });
 
-  it('removes target type effects from existing cards and deletes target-only cards', () => {
-    installLocalStorage();
-    const mixed: UpgradeCardDefinition = {
-      ...card,
-      effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 45 } },
-        { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
-        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
-      ],
-    };
-    const targetOnly: UpgradeCardDefinition = {
-      ...card,
-      id: 'target_only',
-      effects: [
-        { type: 'ability-slow-target-type', abilityId: 'fire', value: { type: 'all-enemies', count: 0, areaHeightPercent: 0 } },
-      ],
-    };
+  it('rejects malformed generation json instead of migrating it', () => {
+    const values = installLocalStorage();
+    values.set('game.upgrade-generation.v2', JSON.stringify({
+      enabled: true,
+      previewCardCount: 10,
+      minParametersPerCard: 1,
+      maxParametersPerCard: 1,
+      allowDuplicateParameters: false,
+      allowSameAbility: true,
+      rarityWeights: { common: 100, rare: 50, epic: 20, legendary: 5 },
+      parameters: {},
+    }));
 
-    window.localStorage.setItem('game.upgrades.v3', JSON.stringify([mixed, targetOnly]));
-
-    const expected = [{
-      ...mixed,
-      effects: [
-        { type: 'ability-damage-source', abilityId: 'fire', value: 'magic' },
-        { type: 'ability-periodic-visual-color', abilityId: 'fire', value: '#00ff00' },
-      ],
-    }];
-    expect(loadUpgrades()).toEqual(expected);
-    expect(JSON.parse(window.localStorage.getItem('game.upgrades.v3') ?? '[]')).toEqual(expected);
+    expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
   });
 
+  it('rejects malformed manual-card json', () => {
+    const values = installLocalStorage();
+    values.set('game.upgrade-cards.v1', JSON.stringify([{ id: 'broken' }]));
 
-  it('persists target type effects after the parameter is enabled for the ability', () => {
-    installLocalStorage();
-    const withTargetTypes: UpgradeCardDefinition = {
-      ...card,
-      effects: [
-        { type: 'ability-damage-target-type', abilityId: 'fire', value: { type: 'area-enemies', count: 0, areaHeightPercent: 45 } },
-        { type: 'ability-slow-target-type', abilityId: 'fire', value: { type: 'all-enemies', count: 0, areaHeightPercent: 0 } },
-      ],
-    };
-
-    persistUpgrades([withTargetTypes]);
-
-    expect(loadUpgrades()).toEqual([withTargetTypes]);
+    expect(loadUpgradeCards()).toEqual([]);
   });
-
-  it('does not load the previous storage version', () => {
-    installLocalStorage();
-    window.localStorage.setItem('game.upgrades.v2', JSON.stringify([card]));
-
-    expect(loadUpgrades()).toEqual(DEFAULT_UPGRADES);
-  });
-
-  it('rejects the previous target json shape instead of migrating it', () => {
-    installLocalStorage();
-    window.localStorage.setItem('game.upgrades.v3', JSON.stringify([{
-      ...card,
-      effects: [{ type: 'ability-damage-target-type', abilityId: 'fire', value: 'area-enemies' }],
-    }]));
-
-    expect(loadUpgrades()).toEqual(DEFAULT_UPGRADES);
-  });
-
 });

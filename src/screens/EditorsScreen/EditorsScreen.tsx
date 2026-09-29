@@ -2,7 +2,7 @@ import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits } from '../../editor/units/unitStorage';
 import { loadMaps } from '../../editor/maps/mapStorage';
-import { loadUpgrades } from '../../editor/upgrades/upgradeStorage';
+import { loadUpgradeCards, loadUpgradeGenerationConfig } from '../../editor/upgrades/upgradeStorage';
 import styles from './EditorsScreen.module.css';
 
 type EditorsScreenProps = {
@@ -19,7 +19,9 @@ export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, on
   const abilitiesCount = loadAbilities().length;
   const unitsCount = loadUnits().length;
   const mapsCount = loadMaps().length;
-  const upgradesCount = loadUpgrades().length;
+  const manualUpgradeCardsCount = loadUpgradeCards().length;
+  const upgradesConfig = loadUpgradeGenerationConfig();
+  const upgradeParametersCount = Object.values(upgradesConfig.parameters).filter((rule: { enabled: boolean }) => rule.enabled).length;
 
   return (
     <main className={styles.screen}>
@@ -60,8 +62,8 @@ export function EditorsScreen({ onBack, onOpenDamageSources, onOpenAbilities, on
         <button className={styles.card} type="button" onClick={onOpenUpgrades}>
           <span className={styles.cardIcon} aria-hidden="true">🃏</span>
           <strong>Редактор карточек улучшений</strong>
-          <span>Редкость, вес, лимит получений и набор эффектов способностей.</span>
-          <small>Карточек: {upgradesCount}</small>
+          <span>Ручные карточки, редкости, веса, диапазоны и правила автоматической генерации.</span>
+          <small>Ручных карточек: {manualUpgradeCardsCount} · активных параметров генератора: {upgradeParametersCount}</small>
         </button>
 
         <button className={styles.card} type="button" onClick={onOpenMaps}>
