@@ -58,3 +58,87 @@
   padding: 5px;
   cursor: pointer;
 }
+
+.multiSelect {
+  position: relative;
+}
+
+.multiSelect summary {
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 36px 9px 11px;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  outline: none;
+  background: #080f1d;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  cursor: pointer;
+  list-style: none;
+}
+
+.multiSelect summary::-webkit-details-marker {
+  display: none;
+}
+
+.multiSelect summary::after {
+  content: '▾';
+  position: absolute;
+  right: 12px;
+  color: #94a3b8;
+  transition: transform 120ms ease;
+}
+
+.multiSelect[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.multiSelect[open] summary,
+.multiSelect summary:focus-visible {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
+}
+
+.multiSelect[aria-invalid='true'] summary {
+  border-color: #fb7185;
+}
+
+.multiSelectMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: min(420px, 60vh);
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  background: #0b1322;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.multiSelectOption {
+  min-height: 38px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 8px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.multiSelectOption:hover {
+  background: rgba(30, 41, 59, 0.72);
+}

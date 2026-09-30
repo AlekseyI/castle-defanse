@@ -9,7 +9,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 38,
     damage: 10,
     coinsOnDeath: 1,
-    isBoss: false,
+    traits: [],
   },
   {
     id: 'wave_1_boss',
@@ -19,7 +19,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 28,
     damage: 24,
     coinsOnDeath: 1,
-    isBoss: true,
+    traits: ['boss'],
   },
   {
     id: 'wave_2_enemy',
@@ -29,7 +29,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 43,
     damage: 11,
     coinsOnDeath: 1,
-    isBoss: false,
+    traits: [],
   },
   {
     id: 'wave_2_boss',
@@ -39,7 +39,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 31,
     damage: 28,
     coinsOnDeath: 1,
-    isBoss: true,
+    traits: ['boss'],
   },
   {
     id: 'wave_3_enemy',
@@ -49,7 +49,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 48,
     damage: 12,
     coinsOnDeath: 1,
-    isBoss: false,
+    traits: [],
   },
   {
     id: 'wave_3_boss',
@@ -59,6 +59,6 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     speed: 34,
     damage: 34,
     coinsOnDeath: 1,
-    isBoss: true,
+    traits: ['boss'],
   },
 ];

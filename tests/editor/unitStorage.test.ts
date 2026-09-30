@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe('unitStorage', () => {
-  it('loads saved vulnerability values down to -100%', () => {
+  it('loads saved traits, multipliers and vulnerability values', () => {
     installLocalStorage();
     const units: UnitDefinition[] = [
       {
@@ -28,7 +28,8 @@ describe('unitStorage', () => {
         speed: 20,
         damage: 10,
         coinsOnDeath: 4,
-        isBoss: false,
+        traits: ['boss', 'armored', 'generous'],
+        traitMultipliers: { protection: 2, coins: 1.5 },
         damageProtection: { fire: -100 },
       },
     ];
@@ -40,22 +41,23 @@ describe('unitStorage', () => {
 
   it('rejects saved units without coinsOnDeath', () => {
     installLocalStorage();
-    window.localStorage.setItem('game.units.v7', JSON.stringify([
+    window.localStorage.setItem('game.units.v8', JSON.stringify([
       {
-        id: 'legacy_unit',
-        name: 'Старый юнит',
+        id: 'invalid_unit',
+        name: 'Некорректный юнит',
         hp: 100,
         speed: 20,
         damage: 10,
+        traits: [],
       },
     ]));
 
     const loaded = loadUnits();
     expect(loaded.map((unit) => unit.id)).toEqual(DEFAULT_UNITS.map((unit) => unit.id));
-    expect(loaded.some((unit) => unit.id === 'legacy_unit')).toBe(false);
+    expect(loaded.some((unit) => unit.id === 'invalid_unit')).toBe(false);
   });
 
-  it('rejects the old unit format without isBoss', () => {
+  it('does not read the previous unit json format', () => {
     installLocalStorage();
     window.localStorage.setItem('game.units.v7', JSON.stringify([
       {
@@ -65,18 +67,16 @@ describe('unitStorage', () => {
         speed: 20,
         damage: 10,
         coinsOnDeath: 1,
+        isBoss: true,
       },
     ]));
 
-    const loaded = loadUnits();
-    expect(loaded.map((unit) => unit.id)).toEqual(DEFAULT_UNITS.map((unit) => unit.id));
-    expect(loaded.some((unit) => unit.id === 'old_unit')).toBe(false);
+    expect(loadUnits()).toEqual(DEFAULT_UNITS);
   });
 
-
-  it('rejects saved protection values below -100%', () => {
+  it('rejects modifier traits without their multipliers', () => {
     installLocalStorage();
-    persistUnits([
+    window.localStorage.setItem('game.units.v8', JSON.stringify([
       {
         id: 'invalid_unit',
         name: 'Некорректный юнит',
@@ -84,29 +84,30 @@ describe('unitStorage', () => {
         speed: 20,
         damage: 10,
         coinsOnDeath: 1,
-        isBoss: false,
+        traits: ['healthy'],
+      },
+    ]));
+
+    expect(loadUnits()).toEqual(DEFAULT_UNITS);
+  });
+
+  it('rejects saved protection values below -100%', () => {
+    installLocalStorage();
+    window.localStorage.setItem('game.units.v8', JSON.stringify([
+      {
+        id: 'invalid_unit',
+        name: 'Некорректный юнит',
+        hp: 100,
+        speed: 20,
+        damage: 10,
+        coinsOnDeath: 1,
+        traits: [],
         damageProtection: { fire: -101 },
       },
-    ]);
+    ]));
 
     const loaded = loadUnits();
     expect(loaded.map((unit) => unit.id)).toEqual(DEFAULT_UNITS.map((unit) => unit.id));
     expect(loaded.some((unit) => unit.id === 'invalid_unit')).toBe(false);
-  });
-
-  it('does not load the previous unit json format with the removed per-unit upgrade flag', () => {
-    installLocalStorage();
-    window.localStorage.setItem('game.units.v6', JSON.stringify([{
-      id: 'old_boss',
-      name: 'Старый босс',
-      hp: 100,
-      speed: 20,
-      damage: 10,
-      coinsOnDeath: 1,
-      isBoss: true,
-      grantsUpgradeOnKill: true,
-    }]));
-
-    expect(loadUnits()).toEqual(DEFAULT_UNITS);
   });
 });

@@ -1,4 +1,10 @@
-import type { DamageProtection, UnitDefinition } from './types';
+import {
+  UNIT_TRAITS,
+  type DamageProtection,
+  type UnitDefinition,
+  type UnitTrait,
+  type UnitTraitMultipliers,
+} from './types';
 
 export interface UnitValidationResult {
   valid: boolean;
@@ -6,6 +12,7 @@ export interface UnitValidationResult {
 }
 
 const UNIT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
+const UNIT_TRAIT_ORDER = new Map<UnitTrait, number>(UNIT_TRAITS.map((trait, index) => [trait, index]));
 
 function normalizeDamageProtection(protection?: DamageProtection): DamageProtection | undefined {
   if (!protection) return undefined;
@@ -19,7 +26,34 @@ function normalizeDamageProtection(protection?: DamageProtection): DamageProtect
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function normalizeTraits(traits: UnitTrait[]): UnitTrait[] {
+  return [...new Set(traits)].sort(
+    (left, right) => (UNIT_TRAIT_ORDER.get(left) ?? 0) - (UNIT_TRAIT_ORDER.get(right) ?? 0),
+  );
+}
+
+function normalizeTraitMultipliers(
+  traits: UnitTrait[],
+  multipliers?: UnitTraitMultipliers,
+): UnitTraitMultipliers | undefined {
+  if (!multipliers) return undefined;
+
+  const normalized: UnitTraitMultipliers = {};
+  if (traits.includes('healthy') && multipliers.hp !== undefined) normalized.hp = multipliers.hp;
+  if (traits.includes('armored') && multipliers.protection !== undefined) normalized.protection = multipliers.protection;
+  if (traits.includes('strong') && multipliers.damage !== undefined) normalized.damage = multipliers.damage;
+  if (traits.includes('fast') && multipliers.speed !== undefined) normalized.speed = multipliers.speed;
+  if (traits.includes('generous') && multipliers.coins !== undefined) normalized.coins = multipliers.coins;
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+export function hasTrait(unit: Pick<UnitDefinition, 'traits'>, trait: UnitTrait): boolean {
+  return unit.traits.includes(trait);
+}
+
 export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
+  const traits = normalizeTraits(unit.traits);
   const normalized: UnitDefinition = {
     id: unit.id.trim().toLowerCase(),
     name: unit.name.trim(),
@@ -27,10 +61,13 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     speed: unit.speed,
     damage: unit.damage,
     coinsOnDeath: unit.coinsOnDeath,
-    isBoss: unit.isBoss,
+    traits,
   };
 
   if (unit.gameKey) normalized.gameKey = unit.gameKey;
+
+  const traitMultipliers = normalizeTraitMultipliers(traits, unit.traitMultipliers);
+  if (traitMultipliers) normalized.traitMultipliers = traitMultipliers;
 
   const damageProtection = normalizeDamageProtection(unit.damageProtection);
   if (damageProtection) normalized.damageProtection = damageProtection;
@@ -43,6 +80,10 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
   }
 
   return normalized;
+}
+
+function hasValidMultiplier(value: number | undefined): boolean {
+  return value !== undefined && Number.isFinite(value) && value > 0;
 }
 
 export function validateUnit(
@@ -79,6 +120,18 @@ export function validateUnit(
 
   if (!Number.isFinite(normalized.coinsOnDeath) || normalized.coinsOnDeath < 0) {
     errors.coinsOnDeath = 'Количество монет должно быть числом 0 или больше.';
+  }
+
+  const multipliers = normalized.traitMultipliers;
+  const invalidTraitMultiplier =
+    (hasTrait(normalized, 'healthy') && !hasValidMultiplier(multipliers?.hp)) ||
+    (hasTrait(normalized, 'armored') && !hasValidMultiplier(multipliers?.protection)) ||
+    (hasTrait(normalized, 'strong') && !hasValidMultiplier(multipliers?.damage)) ||
+    (hasTrait(normalized, 'fast') && !hasValidMultiplier(multipliers?.speed)) ||
+    (hasTrait(normalized, 'generous') && !hasValidMultiplier(multipliers?.coins));
+
+  if (invalidTraitMultiplier) {
+    errors.traitMultipliers = 'Множитель выбранной особенности должен быть числом больше 0.';
   }
 
   if (normalized.damageProtection) {

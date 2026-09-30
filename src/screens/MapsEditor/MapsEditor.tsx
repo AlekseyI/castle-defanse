@@ -29,6 +29,7 @@ import type {
   WaveBlockStartCondition,
   WaveSpawnBlock,
 } from '../../editor/maps/types';
+import { hasTrait } from '../../editor/units/unitLogic';
 import { loadUnits } from '../../editor/units/unitStorage';
 import styles from './MapsEditor.module.css';
 
@@ -105,8 +106,8 @@ export function MapsEditor({ onBackToMain, onBackToEditors }: MapsEditorProps) {
   const [units] = useState(() => loadUnits());
   const unitIds = useMemo(() => units.map((unit) => unit.id), [units]);
   const firstUnitId = unitIds[0] ?? '';
-  const generatorUnitIds = useMemo(() => units.filter((unit) => !unit.isBoss).map((unit) => unit.id), [units]);
-  const generatorBossUnitIds = useMemo(() => units.filter((unit) => unit.isBoss).map((unit) => unit.id), [units]);
+  const generatorUnitIds = useMemo(() => units.filter((unit) => !hasTrait(unit, 'boss')).map((unit) => unit.id), [units]);
+  const generatorBossUnitIds = useMemo(() => units.filter((unit) => hasTrait(unit, 'boss')).map((unit) => unit.id), [units]);
   const [maps, setMaps] = useState<MapDefinition[]>(() => loadMaps());
   const sortedMaps = useMemo(
     () => [...maps].sort((a, b) => a.name.localeCompare(b.name, 'ru') || a.id.localeCompare(b.id)),

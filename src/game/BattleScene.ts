@@ -8,7 +8,8 @@ import { loadDamageSources } from '../editor/damageSources/damageSourceStorage';
 import type { DamageSource } from '../editor/damageSources/types';
 import { loadUpgradeCards, loadUpgradeGenerationConfig } from '../editor/upgrades/upgradeStorage';
 import type { UpgradeCardDefinition, UpgradeGenerationConfig } from '../editor/upgrades/types';
-import type { UnitDefinition } from '../editor/units/types';
+import { hasTrait } from '../editor/units/unitLogic';
+import type { UnitDefinition, UnitTrait } from '../editor/units/types';
 import type { TileKind } from './types';
 import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
 import { getRuntimeSpawnBlock, getRuntimeUnit, getRuntimeWave, getWaveBlockStep } from './waveLogic';
@@ -55,7 +56,7 @@ interface Enemy {
   damageProtection?: UnitDefinition['damageProtection'];
   frozenFor: number;
   slowPercent: number;
-  isBoss: boolean;
+  traits: UnitDefinition['traits'];
 }
 
 interface ActiveBattleAreaEffect extends ActiveAreaEffect<Enemy> {
@@ -70,6 +71,25 @@ interface ActiveBattlePeriodicDamage extends ActivePeriodicDamage<Enemy> {
 interface ActiveDamagePopup {
   text: Text;
   remaining: number;
+}
+
+const TRAIT_ICONS: Partial<Record<UnitTrait, string>> = {
+  healthy: '♥',
+  armored: '🛡',
+  strong: '💪',
+  fast: '⚡',
+  generous: '🪙',
+};
+
+function getUnitStatusText(unit: Pick<UnitDefinition, 'traits'>): string {
+  const parts: string[] = [];
+  if (hasTrait(unit, 'boss')) parts.push('БОСС');
+
+  for (const trait of ['healthy', 'armored', 'strong', 'fast', 'generous'] as const) {
+    if (hasTrait(unit, trait)) parts.push(TRAIT_ICONS[trait] ?? '');
+  }
+
+  return parts.filter(Boolean).join(' ');
 }
 
 export class BattleScene extends Container {
@@ -314,7 +334,7 @@ export class BattleScene extends Container {
   }
 
   private spawnEnemy(unit: UnitDefinition) {
-    const isBoss = unit.isBoss;
+    const isBoss = hasTrait(unit, 'boss');
     const { hp, speed, damage, coinsOnDeath, damageProtection } = unit;
     const root = new Container();
     const body = new Graphics();
@@ -336,14 +356,15 @@ export class BattleScene extends Container {
       root.addChild(eyeLeft, eyeRight);
     }
 
-    if (isBoss) {
-      const bossLabel = new Text({
-        text: 'БОСС',
+    const statusText = getUnitStatusText(unit);
+    if (statusText) {
+      const statusLabel = new Text({
+        text: statusText,
         style: { fill: 0xffe4f2, fontSize: 12, fontWeight: '900' },
       });
-      bossLabel.anchor.set(0.5);
-      bossLabel.y = -47;
-      root.addChild(bossLabel);
+      statusLabel.anchor.set(0.5);
+      statusLabel.y = isBoss ? -47 : -36;
+      root.addChild(statusLabel);
     }
 
     root.x = isBoss
@@ -369,7 +390,7 @@ export class BattleScene extends Container {
       damageProtection,
       frozenFor: 0,
       slowPercent: 0,
-      isBoss,
+      traits: [...unit.traits],
     };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
@@ -446,7 +467,11 @@ export class BattleScene extends Container {
       },
     });
     text.anchor.set(0.5);
-    text.position.set(enemy.root.x, enemy.root.y - (enemy.isBoss ? 52 : 34));
+    const hasModifierTraits = enemy.traits.some((trait) => trait !== 'boss');
+    const popupOffset = hasTrait(enemy, 'boss')
+      ? (hasModifierTraits ? 66 : 52)
+      : (hasModifierTraits ? 53 : 34);
+    text.position.set(enemy.root.x, enemy.root.y - popupOffset);
     this.noticeLayer.addChild(text);
     this.activeDamagePopups.push({ text, remaining: critical ? 1.05 : 0.85 });
   }
@@ -474,7 +499,7 @@ export class BattleScene extends Container {
     if (reason === 'killed') {
       useGameStore.getState().addKill(enemy.coinsOnDeath);
       if (earnsBossUpgradeReward(
-        enemy.isBoss,
+        hasTrait(enemy, 'boss'),
         this.map.upgradeSettings.rewardOnBossKill,
         reason,
       )) {
@@ -485,8 +510,8 @@ export class BattleScene extends Container {
 
   private redrawEnemyHp(enemy: Enemy) {
     const ratio = Math.max(0, enemy.hp / enemy.maxHp);
-    const width = enemy.isBoss ? 60 : 36;
-    const y = enemy.isBoss ? 37 : 24;
+    const width = hasTrait(enemy, 'boss') ? 60 : 36;
+    const y = hasTrait(enemy, 'boss') ? 37 : 24;
     enemy.hpBar.clear();
     enemy.hpBar.roundRect(-width / 2, y, width, 6, 2).fill({ color: 0x172033 });
     enemy.hpBar.roundRect(-width / 2, y, width * ratio, 6, 2).fill({ color: 0xff5b6e });
@@ -674,7 +699,7 @@ export class BattleScene extends Container {
   private applyPeriodicDamage(enemy: Enemy, effect: PeriodicDamageAbilityEffect, abilityId: TileKind) {
     if (!this.enemies.includes(enemy) || !shouldApplyPeriodicDamage(effect.chancePercent)) return;
 
-    const aura = new PeriodicDamageAura(effect.visualColor, enemy.isBoss);
+    const aura = new PeriodicDamageAura(effect.visualColor, hasTrait(enemy, 'boss'));
     enemy.root.addChild(aura);
     const activeEffect: ActiveBattlePeriodicDamage = {
       ...createActivePeriodicDamage(enemy, effect),
@@ -854,7 +879,7 @@ export class BattleScene extends Container {
       const widthScale = previousWidth > 0 ? width / previousWidth : 1;
 
       for (const enemy of this.enemies) {
-        const sidePadding = enemy.isBoss ? 34 : 24;
+        const sidePadding = hasTrait(enemy, 'boss') ? 34 : 24;
         enemy.root.x = Math.min(width - sidePadding, Math.max(sidePadding, enemy.root.x * widthScale));
 
         const previousPathLength = Math.max(1, previousLaneEnd - enemy.spawnY);

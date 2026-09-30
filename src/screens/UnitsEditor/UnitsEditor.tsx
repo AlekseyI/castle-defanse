@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { EditorCheckbox, EditorFileInput, EditorInput } from '../../components/EditorControls';
-import { deleteUnit, normalizeUnit, saveUnit, validateUnit } from '../../editor/units/unitLogic';
+import { EditorFileInput, EditorInput, EditorMultiSelect } from '../../components/EditorControls';
+import { deleteUnit, hasTrait, normalizeUnit, saveUnit, validateUnit } from '../../editor/units/unitLogic';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits, persistUnits } from '../../editor/units/unitStorage';
-import type { UnitDefinition } from '../../editor/units/types';
+import type { UnitDefinition, UnitTrait, UnitTraitMultipliers } from '../../editor/units/types';
 import styles from './UnitsEditor.module.css';
 
 
@@ -14,9 +14,29 @@ const EMPTY_UNIT: UnitDefinition = {
   speed: 40,
   damage: 10,
   coinsOnDeath: 1,
-  isBoss: false,
+  traits: [],
   damageProtection: {},
 };
+
+
+const TRAIT_OPTIONS = [
+  { value: 'boss', label: 'Босс' },
+  { value: 'healthy', label: 'Здоровяк' },
+  { value: 'armored', label: 'Бронированный' },
+  { value: 'strong', label: 'Сильный' },
+  { value: 'fast', label: 'Быстрый' },
+  { value: 'generous', label: 'Щедрый' },
+] satisfies ReadonlyArray<{ value: UnitTrait; label: string }>;
+
+const TRAIT_MULTIPLIER_KEYS: Partial<Record<UnitTrait, keyof UnitTraitMultipliers>> = {
+  healthy: 'hp',
+  armored: 'protection',
+  strong: 'damage',
+  fast: 'speed',
+  generous: 'coins',
+};
+
+const DEFAULT_TRAIT_MULTIPLIER = 1;
 
 type UnitsEditorProps = {
   onBackToMain: () => void;
@@ -42,6 +62,8 @@ function parseNumber(value: string): number {
 function cloneUnit(unit: UnitDefinition): UnitDefinition {
   return {
     ...unit,
+    traits: [...unit.traits],
+    traitMultipliers: unit.traitMultipliers ? { ...unit.traitMultipliers } : undefined,
     damageProtection: unit.damageProtection ? { ...unit.damageProtection } : {},
     image: unit.image ? { ...unit.image } : undefined,
   };
@@ -56,6 +78,18 @@ function isSameDamageProtection(
   if (leftEntries.length !== rightEntries.length) return false;
 
   return leftEntries.every(([sourceId, value]) => right?.[sourceId] === value);
+}
+
+function isSameTraits(left: UnitTrait[], right: UnitTrait[]): boolean {
+  return left.length === right.length && left.every((trait, index) => trait === right[index]);
+}
+
+function isSameTraitMultipliers(
+  left: UnitDefinition['traitMultipliers'],
+  right: UnitDefinition['traitMultipliers'],
+): boolean {
+  const keys: Array<keyof UnitTraitMultipliers> = ['hp', 'protection', 'damage', 'speed', 'coins'];
+  return keys.every((key) => left?.[key] === right?.[key]);
 }
 
 export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps) {
@@ -125,7 +159,8 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
       && current.speed === normalized.speed
       && current.damage === normalized.damage
       && current.coinsOnDeath === normalized.coinsOnDeath
-      && current.isBoss === normalized.isBoss
+      && isSameTraits(current.traits, normalized.traits)
+      && isSameTraitMultipliers(current.traitMultipliers, normalized.traitMultipliers)
       && current.gameKey === normalized.gameKey
       && isSameDamageProtection(current.damageProtection, normalized.damageProtection)
       && current.image?.name === normalized.image?.name
@@ -333,13 +368,125 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
                   {validation.errors.coinsOnDeath && <small className={styles.fieldError}>{validation.errors.coinsOnDeath}</small>}
                 </label>
 
-                <label className={styles.checkboxField}>
-                  <EditorCheckbox
-                    checked={draft.isBoss}
-                    onChange={(event) => setDraft((current) => ({ ...current, isBoss: event.target.checked }))}
+                <div className={`${styles.field} ${styles.fullRow}`}>
+                  <span>Особенности</span>
+                  <EditorMultiSelect
+                    value={draft.traits}
+                    options={TRAIT_OPTIONS}
+                    placeholder="Нет особенностей"
+                    invalid={Boolean(validation.errors.traitMultipliers)}
+                    onChange={(traits) => setDraft((current) => {
+                      const traitMultipliers = { ...(current.traitMultipliers ?? {}) };
+
+                      for (const [trait, key] of Object.entries(TRAIT_MULTIPLIER_KEYS) as Array<[
+                        UnitTrait,
+                        keyof UnitTraitMultipliers,
+                      ]>) {
+                        if (traits.includes(trait)) {
+                          if (traitMultipliers[key] === undefined) {
+                            traitMultipliers[key] = DEFAULT_TRAIT_MULTIPLIER;
+                          }
+                        } else {
+                          delete traitMultipliers[key];
+                        }
+                      }
+
+                      return {
+                        ...current,
+                        traits,
+                        traitMultipliers: Object.keys(traitMultipliers).length > 0 ? traitMultipliers : undefined,
+                      };
+                    })}
                   />
-                  <span>Босс</span>
-                </label>
+                  {validation.errors.traitMultipliers && (
+                    <small className={styles.fieldError}>{validation.errors.traitMultipliers}</small>
+                  )}
+                </div>
+
+                {hasTrait(draft, 'healthy') && (
+                  <label className={styles.field}>
+                    <span>Множитель HP</span>
+                    <EditorInput
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={Number.isFinite(draft.traitMultipliers?.hp) ? draft.traitMultipliers?.hp : ''}
+                      aria-invalid={Boolean(validation.errors.traitMultipliers)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        traitMultipliers: { ...current.traitMultipliers, hp: parseNumber(event.target.value) },
+                      }))}
+                    />
+                  </label>
+                )}
+
+                {hasTrait(draft, 'armored') && (
+                  <label className={styles.field}>
+                    <span>Множитель защиты</span>
+                    <EditorInput
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={Number.isFinite(draft.traitMultipliers?.protection) ? draft.traitMultipliers?.protection : ''}
+                      aria-invalid={Boolean(validation.errors.traitMultipliers)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        traitMultipliers: { ...current.traitMultipliers, protection: parseNumber(event.target.value) },
+                      }))}
+                    />
+                  </label>
+                )}
+
+                {hasTrait(draft, 'strong') && (
+                  <label className={styles.field}>
+                    <span>Множитель урона</span>
+                    <EditorInput
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={Number.isFinite(draft.traitMultipliers?.damage) ? draft.traitMultipliers?.damage : ''}
+                      aria-invalid={Boolean(validation.errors.traitMultipliers)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        traitMultipliers: { ...current.traitMultipliers, damage: parseNumber(event.target.value) },
+                      }))}
+                    />
+                  </label>
+                )}
+
+                {hasTrait(draft, 'fast') && (
+                  <label className={styles.field}>
+                    <span>Множитель скорости</span>
+                    <EditorInput
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={Number.isFinite(draft.traitMultipliers?.speed) ? draft.traitMultipliers?.speed : ''}
+                      aria-invalid={Boolean(validation.errors.traitMultipliers)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        traitMultipliers: { ...current.traitMultipliers, speed: parseNumber(event.target.value) },
+                      }))}
+                    />
+                  </label>
+                )}
+
+                {hasTrait(draft, 'generous') && (
+                  <label className={styles.field}>
+                    <span>Множитель монет</span>
+                    <EditorInput
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={Number.isFinite(draft.traitMultipliers?.coins) ? draft.traitMultipliers?.coins : ''}
+                      aria-invalid={Boolean(validation.errors.traitMultipliers)}
+                      onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        traitMultipliers: { ...current.traitMultipliers, coins: parseNumber(event.target.value) },
+                      }))}
+                    />
+                  </label>
+                )}
 
               </div>
             </div>

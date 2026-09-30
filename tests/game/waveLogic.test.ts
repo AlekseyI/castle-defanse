@@ -166,14 +166,70 @@ describe('waveLogic', () => {
       damage: 10,
       speed: 20,
       coinsOnDeath: 1,
-      isBoss: true,
+      traits: ['boss'],
     };
     const runtime = getRuntimeUnit(unit, map.endless, 2);
 
     expect(runtime.hp).toBeCloseTo(121);
     expect(runtime.damage).toBeCloseTo(14.4);
     expect(runtime.speed).toBeCloseTo(22.05);
-    expect(runtime.isBoss).toBe(true);
-    expect(unit).toMatchObject({ hp: 100, damage: 10, speed: 20, isBoss: true });
+    expect(runtime.traits).toEqual(['boss']);
+    expect(unit).toMatchObject({ hp: 100, damage: 10, speed: 20, traits: ['boss'] });
   });
+
+  it('applies selected unit trait multipliers before endless scaling', () => {
+    const unit: UnitDefinition = {
+      id: 'elite',
+      name: 'Элитный',
+      hp: 100,
+      damage: 10,
+      speed: 20,
+      coinsOnDeath: 3,
+      traits: ['healthy', 'strong', 'fast', 'generous'],
+      traitMultipliers: {
+        hp: 2,
+        damage: 1.5,
+        speed: 1.25,
+        coins: 1.5,
+      },
+    };
+
+    const runtime = getRuntimeUnit(unit, map.endless, 1);
+
+    expect(runtime.hp).toBeCloseTo(220);
+    expect(runtime.damage).toBeCloseTo(18);
+    expect(runtime.speed).toBeCloseTo(26.25);
+    expect(runtime.coinsOnDeath).toBe(5);
+    expect(unit).toMatchObject({ hp: 100, damage: 10, speed: 20, coinsOnDeath: 3 });
+  });
+
+  it('multiplies positive armor, divides negative armor and keeps zero unchanged', () => {
+    const unit: UnitDefinition = {
+      id: 'tank',
+      name: 'Танк',
+      hp: 100,
+      damage: 10,
+      speed: 20,
+      coinsOnDeath: 1,
+      traits: ['armored'],
+      traitMultipliers: { protection: 2 },
+      damageProtection: {
+        fire: 40,
+        ice: -40,
+        lightning: 0,
+        poison: 80,
+      },
+    };
+
+    const runtime = getRuntimeUnit(unit, map.endless, 0);
+
+    expect(runtime.damageProtection).toEqual({
+      fire: 80,
+      ice: -20,
+      lightning: 0,
+      poison: 100,
+    });
+    expect(unit.damageProtection).toEqual({ fire: 40, ice: -40, lightning: 0, poison: 80 });
+  });
+
 });

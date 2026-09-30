@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deleteUnit,
+  hasTrait,
   normalizeUnit,
   saveUnit,
   validateUnit,
@@ -14,7 +15,7 @@ const goblin: UnitDefinition = {
   speed: 40,
   damage: 10,
   coinsOnDeath: 1,
-  isBoss: false,
+  traits: [],
   image: {
     name: 'goblin.png',
     src: 'data:image/png;base64,goblin',
@@ -30,7 +31,12 @@ describe('unitLogic', () => {
       speed: 35,
       damage: 24,
       coinsOnDeath: 7,
-      isBoss: true,
+      traits: ['strong', 'boss', 'healthy', 'strong'],
+      traitMultipliers: {
+        hp: 2,
+        damage: 1.5,
+        speed: 3,
+      },
       damageProtection: {
         ' FIRE ': 25,
         ' ICE ': -50,
@@ -47,7 +53,11 @@ describe('unitLogic', () => {
       speed: 35,
       damage: 24,
       coinsOnDeath: 7,
-      isBoss: true,
+      traits: ['boss', 'healthy', 'strong'],
+      traitMultipliers: {
+        hp: 2,
+        damage: 1.5,
+      },
       damageProtection: {
         fire: 25,
         ice: -50,
@@ -60,6 +70,13 @@ describe('unitLogic', () => {
     });
   });
 
+  it('detects traits through the shared helper', () => {
+    const boss = { ...goblin, traits: ['boss', 'fast'] as UnitDefinition['traits'] };
+
+    expect(hasTrait(boss, 'boss')).toBe(true);
+    expect(hasTrait(boss, 'fast')).toBe(true);
+    expect(hasTrait(boss, 'healthy')).toBe(false);
+  });
 
   it('rejects duplicate ids and invalid combat values', () => {
     const result = validateUnit(
@@ -70,7 +87,7 @@ describe('unitLogic', () => {
         speed: -1,
         damage: Number.NaN,
         coinsOnDeath: -1,
-        isBoss: false,
+        traits: [],
       },
       [goblin],
     );
@@ -81,6 +98,41 @@ describe('unitLogic', () => {
     expect(result.errors.speed).toBeTruthy();
     expect(result.errors.damage).toBeTruthy();
     expect(result.errors.coinsOnDeath).toBeTruthy();
+  });
+
+  it('requires a positive multiplier for every selected modifier trait', () => {
+    const missing = validateUnit(
+      {
+        ...goblin,
+        traits: ['healthy'],
+      },
+      [goblin],
+      'goblin',
+    );
+    const invalid = validateUnit(
+      {
+        ...goblin,
+        traits: ['fast'],
+        traitMultipliers: { speed: 0 },
+      },
+      [goblin],
+      'goblin',
+    );
+    const valid = validateUnit(
+      {
+        ...goblin,
+        traits: ['healthy', 'armored', 'strong', 'fast', 'generous'],
+        traitMultipliers: { hp: 2, protection: 2, damage: 1.5, speed: 1.25, coins: 3 },
+      },
+      [goblin],
+      'goblin',
+    );
+
+    expect(missing.valid).toBe(false);
+    expect(missing.errors.traitMultipliers).toBeTruthy();
+    expect(invalid.valid).toBe(false);
+    expect(invalid.errors.traitMultipliers).toBeTruthy();
+    expect(valid.valid).toBe(true);
   });
 
   it('accepts vulnerability down to -100% and rejects values outside the -100..100 range', () => {
@@ -130,7 +182,6 @@ describe('unitLogic', () => {
     expect(result.errors).toEqual({});
   });
 
-
   it('allows changing an id while keeping the internal game binding', () => {
     const boundGoblin: UnitDefinition = { ...goblin, gameKey: 'wave_1_enemy' };
     const renamed = saveUnit(
@@ -143,7 +194,7 @@ describe('unitLogic', () => {
   });
 
   it('creates, updates and deletes units without changing unrelated records', () => {
-    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3, isBoss: false };
+    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, coinsOnDeath: 3, traits: [] };
     const created = saveUnit([goblin], orc);
     const updated = saveUnit(created, { ...goblin, hp: 120 }, 'goblin');
     const deleted = deleteUnit(updated, 'orc');
