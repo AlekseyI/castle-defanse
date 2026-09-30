@@ -220,6 +220,7 @@ export interface UpgradeGenerationConfig {
   enabled: boolean;
   previewCardCount: number;
   parametersPerCard: Record<UpgradeRarity, UpgradeParameterCountRange>;
+  maxParametersPerEffect: number;
   allowDuplicateParameters: boolean;
   allowSameAbility: boolean;
   rarityWeights: Record<UpgradeRarity, number>;

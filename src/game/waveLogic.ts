@@ -4,8 +4,8 @@ import type {
   MapWaveDefinition,
   WaveSpawnBlock,
 } from '../editor/maps/types';
-import { hasTrait } from '../editor/units/unitLogic';
-import type { DamageProtection, UnitDefinition } from '../editor/units/types';
+import { applyUnitTraitMultipliers } from '../editor/units/unitLogic';
+import type { UnitDefinition } from '../editor/units/types';
 
 export type WaveBlockStep = 'spawn-unit' | 'wait-field-clear' | 'advance-block' | 'wave-complete';
 
@@ -87,39 +87,12 @@ export function getRuntimeSpawnBlock(
   };
 }
 
-function applyProtectionMultiplier(
-  protection: DamageProtection | undefined,
-  multiplier: number,
-): DamageProtection | undefined {
-  if (!protection) return undefined;
-
-  return Object.fromEntries(
-    Object.entries(protection).map(([sourceId, value]) => {
-      if (value > 0) return [sourceId, Math.min(100, value * multiplier)];
-      if (value < 0) return [sourceId, value / multiplier];
-      return [sourceId, 0];
-    }),
-  );
-}
-
 export function getRuntimeUnit(
   unit: UnitDefinition,
   endless: EndlessWaveSettings,
   endlessCycle: number,
 ): UnitDefinition {
-  const traitMultipliers = unit.traitMultipliers;
-  const runtimeUnit: UnitDefinition = {
-    ...unit,
-    hp: hasTrait(unit, 'healthy') ? unit.hp * (traitMultipliers?.hp ?? 1) : unit.hp,
-    damage: hasTrait(unit, 'strong') ? unit.damage * (traitMultipliers?.damage ?? 1) : unit.damage,
-    speed: hasTrait(unit, 'fast') ? unit.speed * (traitMultipliers?.speed ?? 1) : unit.speed,
-    coinsOnDeath: hasTrait(unit, 'generous')
-      ? Math.round(unit.coinsOnDeath * (traitMultipliers?.coins ?? 1))
-      : unit.coinsOnDeath,
-    damageProtection: hasTrait(unit, 'armored')
-      ? applyProtectionMultiplier(unit.damageProtection, traitMultipliers?.protection ?? 1)
-      : unit.damageProtection,
-  };
+  const runtimeUnit = applyUnitTraitMultipliers(unit);
 
   if (endlessCycle <= 0) return runtimeUnit;
 

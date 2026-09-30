@@ -10,7 +10,7 @@ describe('gameStore', () => {
   beforeEach(() => {
     useGameStore.setState({ coins: 0 });
     useGameStore.getState().setAutoCastMatches(false);
-    useGameStore.getState().reset(3, ['fire', 'ice', 'lightning', 'shield']);
+    useGameStore.getState().reset(3, ['fire', 'ice', 'lightning', 'shield'], 1, ['fire', 'ice']);
   });
 
   it('stores the automatic match casting preference across battle resets', () => {
@@ -86,15 +86,25 @@ describe('gameStore', () => {
     expect(state.coins).toBe(1);
   });
 
+  it('initializes castle protection at 0% for every damage source and applies matching protection', () => {
+    expect(useGameStore.getState().castleDamageProtection).toEqual({ fire: 0, ice: 0 });
+
+    useGameStore.setState({ castleDamageProtection: { fire: 25, ice: 0 } });
+    useGameStore.getState().damageCastle(40, 'fire');
+    useGameStore.getState().damageCastle(10, 'ice');
+
+    expect(useGameStore.getState().castleHp).toBe(60);
+  });
+
   it('moves to defeat when castle HP reaches zero', () => {
-    useGameStore.getState().damageCastle(100);
+    useGameStore.getState().damageCastle(100, 'fire');
 
     expect(useGameStore.getState().castleHp).toBe(0);
     expect(useGameStore.getState().phase).toBe('defeat');
   });
 
   it('never heals the castle above its maximum HP', () => {
-    useGameStore.getState().damageCastle(40);
+    useGameStore.getState().damageCastle(40, 'fire');
     useGameStore.getState().healCastle(100);
 
     expect(useGameStore.getState().castleHp).toBe(useGameStore.getState().castleMaxHp);
@@ -102,14 +112,15 @@ describe('gameStore', () => {
 
   it('resets battle state for a new run', () => {
     useGameStore.getState().addCharge('lightning', 3);
-    useGameStore.getState().damageCastle(25);
+    useGameStore.getState().damageCastle(25, 'fire');
     useGameStore.getState().setWave(2);
     useGameStore.getState().addKill(1);
 
-    useGameStore.getState().reset(5, ['fire', 'ice', 'lightning', 'shield']);
+    useGameStore.getState().reset(5, ['fire', 'ice', 'lightning', 'shield'], 1, ['fire', 'ice']);
     const state = useGameStore.getState();
 
     expect(state.castleHp).toBe(100);
+    expect(state.castleDamageProtection).toEqual({ fire: 0, ice: 0 });
     expect(state.wave).toBe(1);
     expect(state.totalWaves).toBe(5);
     expect(state.kills).toBe(0);

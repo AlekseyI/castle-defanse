@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getEnemySpawnY, getEnemySpeedScale } from '../../src/game/movementLogic';
+import { getEnemyAttackY, getEnemySpawnY, getEnemySpeedScale } from '../../src/game/movementLogic';
 
 describe('getEnemySpeedScale', () => {
   it('keeps the configured enemy speed on the reference path length', () => {
@@ -33,5 +33,13 @@ describe('getEnemySpawnY', () => {
 
     expect(getEnemySpawnY(normalVisualBottomExtent) + normalVisualBottomExtent).toBeLessThan(0);
     expect(getEnemySpawnY(bossVisualBottomExtent) + bossVisualBottomExtent).toBeLessThan(0);
+  });
+});
+
+describe('getEnemyAttackY', () => {
+  it('places ranged attack point at the configured percentage of the path', () => {
+    expect(getEnemyAttackY(-20, 280, 60)).toBe(160);
+    expect(getEnemyAttackY(-20, 280, 100)).toBe(280);
+    expect(getEnemyAttackY(-20, 280, 0)).toBe(-20);
   });
 });

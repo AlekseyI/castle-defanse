@@ -12,7 +12,7 @@ import {
   validateAbility,
 } from '../../editor/abilities/abilityLogic';
 import { loadAbilities, persistAbilities } from '../../editor/abilities/abilityStorage';
-import { UPGRADE_EFFECT_OPTIONS } from '../../editor/upgrades/upgradeLogic';
+import { UPGRADE_EFFECT_OPTIONS, getGroupedUpgradeEffectOptions } from '../../editor/upgrades/upgradeLogic';
 import type { UpgradeEffectType } from '../../editor/upgrades/types';
 import type {
   AbilityDefinition,
@@ -46,6 +46,8 @@ const VISUAL_EFFECT_LABELS: Record<AbilityVisualEffect, string> = {
   lightning: 'Удар молнии',
   heal: 'Лечение',
 };
+
+const UPGRADE_EFFECT_OPTION_GROUPS = getGroupedUpgradeEffectOptions();
 
 const TARGET_LABELS: Record<AbilityTargetType, string> = {
   'nearest-enemies': 'Ближайшие враги',
@@ -498,19 +500,24 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
                   <details className={styles.multiSelect}>
                     <summary>{getUpgradeParametersLabel(draft)}</summary>
                     <div className={styles.multiSelectMenu}>
-                      {UPGRADE_EFFECT_OPTIONS.map((option) => {
-                        const checked = draft.allowedUpgradeParameters.includes(option.type);
-                        return (
-                          <label key={option.type} className={styles.multiSelectOption}>
-                            <EditorCheckbox
-                              className={styles.multiSelectCheckbox}
-                              checked={checked}
-                              onChange={(event) => handleUpgradeParameterToggle(option.type, event.target.checked)}
-                            />
-                            <span>{option.label}</span>
-                          </label>
-                        );
-                      })}
+                      {UPGRADE_EFFECT_OPTION_GROUPS.map((group) => (
+                        <div key={group.abilityEffectType} className={styles.multiSelectGroup}>
+                          <div className={styles.multiSelectGroupTitle}>{group.label}</div>
+                          {group.options.map((option) => {
+                            const checked = draft.allowedUpgradeParameters.includes(option.type);
+                            return (
+                              <label key={option.type} className={styles.multiSelectOption}>
+                                <EditorCheckbox
+                                  className={styles.multiSelectCheckbox}
+                                  checked={checked}
+                                  onChange={(event) => handleUpgradeParameterToggle(option.type, event.target.checked)}
+                                />
+                                <span>{option.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                   </details>
                 </div>

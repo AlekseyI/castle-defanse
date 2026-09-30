@@ -20,8 +20,10 @@ import {
   createEmptyUpgradeEffect,
   deleteUpgradeCard,
   getCompatibleUpgradeEffectTypes,
+  getGroupedUpgradeEffectOptions,
   getDefaultUpgradeEffectValue,
   getUpgradeEffectOption,
+  getGeneratableUpgradeEffectTypes,
   saveUpgradeCard,
   validateUpgradeCard,
 } from '../../editor/upgrades/upgradeLogic';
@@ -195,9 +197,17 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     [draft, cards, abilities, editingId, damageSources],
   );
 
+  const availableGenerationParameterTypes = useMemo(
+    () => getGeneratableUpgradeEffectTypes(abilities),
+    [abilities],
+  );
+  const availableGenerationParameterTypeSet = useMemo(
+    () => new Set(availableGenerationParameterTypes),
+    [availableGenerationParameterTypes],
+  );
   const enabledParameterCount = useMemo(
-    () => (Object.values(config.parameters) as UpgradeGenerationConfig['parameters'][UpgradeEffectType][]).filter((rule) => rule.enabled).length,
-    [config.parameters],
+    () => availableGenerationParameterTypes.filter((type) => config.parameters[type].enabled).length,
+    [availableGenerationParameterTypes, config.parameters],
   );
 
   const selectedCard = cards.find((card) => card.id === selectedId) ?? null;
@@ -799,6 +809,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             {draft.effects.map((effect, index) => {
               const ability = abilities.find((item) => item.id === effect.abilityId);
               const compatibleTypes = getCompatibleUpgradeEffectTypes(ability);
+              const compatibleGroups = getGroupedUpgradeEffectOptions(compatibleTypes);
               const effectOption = getUpgradeEffectOption(effect.type);
               return (
                 <article className={styles.manualEffectCard} key={`${index}:${effect.type}:${effect.abilityId}`}>
@@ -818,7 +829,13 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                     <label className={styles.field}>
                       <span>Параметр</span>
                       <EditorSelect value={effect.type} onChange={(event) => changeEffectType(index, event.target.value as UpgradeEffectType)}>
-                        {compatibleTypes.map((type) => <option key={type} value={type}>{getUpgradeEffectOption(type)?.label ?? type}</option>)}
+                        {compatibleGroups.map((group) => (
+                          <optgroup key={group.abilityEffectType} label={group.label}>
+                            {group.options.map((option) => (
+                              <option key={option.type} value={option.type}>{option.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
                       </EditorSelect>
                       {validation.errors[`effect.${index}.type`] && <small className={styles.fieldError}>{validation.errors[`effect.${index}.type`]}</small>}
                     </label>
@@ -868,6 +885,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           <label className={styles.field}>
             <span>Количество карточек в предпросмотре</span>
             <EditorInput type="number" min="1" max="50" value={config.previewCardCount} onChange={(event) => patchConfig((next) => { next.previewCardCount = Math.min(50, Math.max(1, Math.floor(numericValue(event.target.value, 1)))); })} />
+          </label>
+          <label className={styles.field}>
+            <span>Максимум параметров одного эффекта</span>
+            <EditorInput type="number" min="1" max="10" step="1" value={config.maxParametersPerEffect} onChange={(event) => patchConfig((next) => { next.maxParametersPerEffect = Math.min(10, Math.max(1, Math.floor(numericValue(event.target.value, 1)))); })} />
+            <small>Например, при значении 2 в одной карточке будет не больше двух параметров замедления, урона, периодического урона или лечения.</small>
           </label>
         </div>
       </section>
@@ -921,7 +943,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       </section>
 
       {PARAMETER_GROUPS.map((group) => {
-        const options = UPGRADE_EFFECT_OPTIONS.filter((option) => group.match(option.type));
+        const options = UPGRADE_EFFECT_OPTIONS.filter((option) => (
+          availableGenerationParameterTypeSet.has(option.type) && group.match(option.type)
+        ));
         if (options.length === 0) return null;
         return (
           <section className={styles.formSection} key={group.label}>

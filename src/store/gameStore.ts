@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import type { DamageProtection } from '../editor/units/types';
 import type { UpgradeCardDefinition } from '../editor/upgrades/types';
 import { MAX_CHARGES } from '../game/config';
 import type { SpellCharges, TileKind } from '../game/types';
+import { getDamageAfterProtection } from '../game/unitRuntime';
 import {
   addUpgradeEffectToModifiers,
   type AbilityRuntimeModifiers,
@@ -12,6 +14,7 @@ type GamePhase = 'playing' | 'upgrade-selection' | 'victory' | 'defeat';
 interface GameState {
   castleHp: number;
   castleMaxHp: number;
+  castleDamageProtection: DamageProtection;
   wave: number;
   totalWaves: number;
   charges: SpellCharges;
@@ -27,7 +30,7 @@ interface GameState {
   addCharge: (kind: TileKind, amount: number) => void;
   handleMatch: (kind: TileKind, amount: number, cast: (kind: TileKind) => void) => void;
   spendCharge: (kind: TileKind) => boolean;
-  damageCastle: (amount: number) => void;
+  damageCastle: (amount: number, sourceId: string) => void;
   healCastle: (amount: number) => void;
   setWave: (wave: number) => void;
   addKill: (coins: number) => void;
@@ -37,7 +40,7 @@ interface GameState {
   openUpgradeSelection: (choices: UpgradeCardDefinition[]) => void;
   dismissUpgradeSelection: () => boolean;
   selectUpgrade: (cardId: string) => boolean;
-  reset: (totalWaves: number, abilityIds?: TileKind[], maxCardReceives?: number) => void;
+  reset: (totalWaves: number, abilityIds?: TileKind[], maxCardReceives?: number, damageSourceIds?: string[]) => void;
 }
 
 const emptyCharges = (abilityIds: TileKind[] = []): SpellCharges => Object.fromEntries(
@@ -47,6 +50,7 @@ const emptyCharges = (abilityIds: TileKind[] = []): SpellCharges => Object.fromE
 export const useGameStore = create<GameState>()((set, get) => ({
   castleHp: 100,
   castleMaxHp: 100,
+  castleDamageProtection: {},
   wave: 1,
   totalWaves: 3,
   charges: emptyCharges(),
@@ -92,11 +96,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  damageCastle: (amount) => {
+  damageCastle: (amount, sourceId) => {
     const state = get();
     if (state.phase !== 'playing') return;
 
-    const nextHp = Math.max(0, state.castleHp - amount);
+    const dealtDamage = getDamageAfterProtection(amount, sourceId, state.castleDamageProtection);
+    const nextHp = Math.max(0, state.castleHp - dealtDamage);
     set({ castleHp: nextHp, phase: nextHp <= 0 ? 'defeat' : state.phase });
   },
 
@@ -146,10 +151,11 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  reset: (totalWaves, abilityIds = [], maxCardReceives = 1) =>
+  reset: (totalWaves, abilityIds = [], maxCardReceives = 1, damageSourceIds = []) =>
     set({
       castleHp: 100,
       castleMaxHp: 100,
+      castleDamageProtection: Object.fromEntries(damageSourceIds.map((sourceId) => [sourceId, 0])),
       wave: 1,
       totalWaves,
       charges: emptyCharges(abilityIds),

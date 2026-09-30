@@ -455,3 +455,315 @@
   cursor: pointer;
 }
 
+
+.finalStats {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.previewStatsButton {
+  min-height: 42px;
+  justify-self: start;
+  padding: 9px 15px;
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.58), rgba(8, 47, 73, 0.9));
+  color: #ecfeff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.previewStatsButton:hover:not(:disabled) {
+  border-color: rgba(165, 243, 252, 0.78);
+}
+
+.previewStatsButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.finalStatsResult {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(103, 232, 249, 0.22);
+  border-radius: 13px;
+  background: rgba(8, 47, 73, 0.22);
+}
+
+.finalStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finalStatsGrid > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.finalStatsGrid small,
+.finalProtection > small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.finalStatsGrid strong {
+  color: #f8fafc;
+  font-size: 17px;
+}
+
+.finalProtection {
+  display: grid;
+  gap: 7px;
+}
+
+.finalProtectionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.finalProtectionList span,
+.noProtection {
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .finalStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.animationHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.animationHeading p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.animationToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.animationSettings {
+  width: min(280px, 100%);
+  margin-top: 16px;
+}
+
+.animationGroupTitle {
+  margin-top: 18px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.animationTypeGrid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.animationTypeButton {
+  min-width: 0;
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 11px;
+  background: rgba(8, 15, 29, 0.78);
+  color: #e2e8f0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.animationTypeButton:hover {
+  border-color: rgba(103, 232, 249, 0.4);
+}
+
+.animationTypeButton.active {
+  border-color: rgba(103, 232, 249, 0.62);
+  background: rgba(8, 145, 178, 0.16);
+}
+
+.animationTypeButton span {
+  font-weight: 900;
+}
+
+.animationTypeButton small {
+  color: #94a3b8;
+}
+
+.animationWorkspace {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+  gap: 14px;
+}
+
+.animationPreviewPanel,
+.animationFrameGrid {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.17);
+  border-radius: 14px;
+  background: rgba(8, 15, 29, 0.62);
+}
+
+.animationPreviewPanel {
+  display: grid;
+  align-content: start;
+  gap: 11px;
+}
+
+.animationPreviewPanel > strong {
+  color: #f8fafc;
+}
+
+.animationStage {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.76);
+  color: #64748b;
+}
+
+.animationStage img {
+  width: 100%;
+  height: 220px;
+  display: block;
+  object-fit: contain;
+}
+
+.animationStatus {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.animationFrameGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.animationFrameCard {
+  min-width: 0;
+  padding: 9px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.17);
+  border-radius: 11px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.animationFrameImage {
+  height: 110px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 9px;
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.animationFrameImage img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.animationFrameMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.animationFrameMeta strong {
+  color: #67e8f9;
+}
+
+.animationFrameMeta span {
+  min-width: 0;
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.animationEmptyState {
+  min-height: 160px;
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.animationEmptyState strong {
+  color: #e2e8f0;
+}
+
+@media (max-width: 900px) {
+  .animationWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .animationFrameGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .animationHeading {
+    flex-direction: column;
+  }
+
+  .animationToolbar {
+    justify-content: flex-start;
+  }
+
+  .animationTypeGrid,
+  .animationFrameGrid {
+    grid-template-columns: 1fr;
+  }
+}

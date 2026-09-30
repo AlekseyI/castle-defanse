@@ -5,6 +5,8 @@ import {
   type UnitTrait,
   type UnitTraitMultipliers,
 } from './types';
+import { normalizeUnitAnimations } from './unitAnimationLogic';
+import type { DamageSource } from '../damageSources/types';
 
 export interface UnitValidationResult {
   valid: boolean;
@@ -52,6 +54,38 @@ export function hasTrait(unit: Pick<UnitDefinition, 'traits'>, trait: UnitTrait)
   return unit.traits.includes(trait);
 }
 
+function applyProtectionMultiplier(
+  protection: DamageProtection | undefined,
+  multiplier: number,
+): DamageProtection | undefined {
+  if (!protection) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(protection).map(([sourceId, value]) => {
+      if (value > 0) return [sourceId, Math.min(100, value * multiplier)];
+      if (value < 0) return [sourceId, value / multiplier];
+      return [sourceId, 0];
+    }),
+  );
+}
+
+export function applyUnitTraitMultipliers(unit: UnitDefinition): UnitDefinition {
+  const multipliers = unit.traitMultipliers;
+
+  return {
+    ...unit,
+    hp: hasTrait(unit, 'healthy') ? unit.hp * (multipliers?.hp ?? 1) : unit.hp,
+    damage: hasTrait(unit, 'strong') ? unit.damage * (multipliers?.damage ?? 1) : unit.damage,
+    speed: hasTrait(unit, 'fast') ? unit.speed * (multipliers?.speed ?? 1) : unit.speed,
+    coinsOnDeath: hasTrait(unit, 'generous')
+      ? Math.round(unit.coinsOnDeath * (multipliers?.coins ?? 1))
+      : unit.coinsOnDeath,
+    damageProtection: hasTrait(unit, 'armored')
+      ? applyProtectionMultiplier(unit.damageProtection, multipliers?.protection ?? 1)
+      : unit.damageProtection,
+  };
+}
+
 export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
   const traits = normalizeTraits(unit.traits);
   const normalized: UnitDefinition = {
@@ -60,9 +94,16 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     hp: unit.hp,
     speed: unit.speed,
     damage: unit.damage,
+    damageSourceId: unit.damageSourceId.trim().toLowerCase(),
     coinsOnDeath: unit.coinsOnDeath,
     traits,
+    animationSpeed: unit.animationSpeed,
+    animations: normalizeUnitAnimations(unit.animations),
   };
+
+  if (traits.includes('ranged')) {
+    normalized.attackStartPathPercent = unit.attackStartPathPercent;
+  }
 
   if (unit.gameKey) normalized.gameKey = unit.gameKey;
 
@@ -89,6 +130,7 @@ function hasValidMultiplier(value: number | undefined): boolean {
 export function validateUnit(
   unit: UnitDefinition,
   units: UnitDefinition[],
+  damageSources: DamageSource[],
   editingId?: string,
 ): UnitValidationResult {
   const normalized = normalizeUnit(unit);
@@ -118,8 +160,27 @@ export function validateUnit(
     errors.damage = 'Урон должен быть числом 0 или больше.';
   }
 
+  if (!normalized.damageSourceId || !damageSources.some((source) => source.id === normalized.damageSourceId)) {
+    errors.damageSourceId = 'Выберите существующий источник урона.';
+  }
+
   if (!Number.isFinite(normalized.coinsOnDeath) || normalized.coinsOnDeath < 0) {
     errors.coinsOnDeath = 'Количество монет должно быть числом 0 или больше.';
+  }
+
+  if (!Number.isFinite(normalized.animationSpeed) || normalized.animationSpeed < 0.1 || normalized.animationSpeed > 100) {
+    errors.animationSpeed = 'Скорость анимации должна быть от 0.1 до 100.';
+  }
+
+  if (hasTrait(normalized, 'ranged')) {
+    if (
+      !Number.isFinite(normalized.attackStartPathPercent) ||
+      normalized.attackStartPathPercent === undefined ||
+      normalized.attackStartPathPercent < 0 ||
+      normalized.attackStartPathPercent > 100
+    ) {
+      errors.attackStartPathPercent = 'Начало атаки должно быть от 0 до 100% пути.';
+    }
   }
 
   const multipliers = normalized.traitMultipliers;

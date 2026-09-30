@@ -53,6 +53,7 @@ export const DEFAULT_UPGRADE_GENERATION_CONFIG: UpgradeGenerationConfig = {
     epic: { min: 3, max: 4 },
     legendary: { min: 4, max: 5 },
   },
+  maxParametersPerEffect: 2,
   allowDuplicateParameters: false,
   allowSameAbility: true,
   rarityWeights: {

@@ -505,6 +505,26 @@
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
 }
 
+.multiSelectGroup {
+  display: grid;
+  gap: 2px;
+}
+
+.multiSelectGroup + .multiSelectGroup {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.multiSelectGroupTitle {
+  padding: 6px 10px 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .multiSelectOption {
   min-height: 38px;
   padding: 8px 10px;

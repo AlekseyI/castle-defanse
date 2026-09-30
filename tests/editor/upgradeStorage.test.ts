@@ -49,6 +49,7 @@ describe('upgradeStorage', () => {
     config.parametersPerCard.rare = { min: 2, max: 3 };
     config.parametersPerCard.epic = { min: 3, max: 4 };
     config.parametersPerCard.legendary = { min: 4, max: 5 };
+    config.maxParametersPerEffect = 3;
     config.rarityWeights.legendary = 25;
     const rule = config.parameters['ability-damage-percent'];
     if (rule.kind === 'number') rule.ranges.epic = { min: 33, max: 44, step: 1 };
@@ -81,6 +82,7 @@ describe('upgradeStorage', () => {
         legendary: { min: 1, max: 1 },
       },
     }));
+    values.set('game.upgrade-generation.v4', JSON.stringify(cloneUpgradeGenerationConfig()));
 
     expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
     expect(loadUpgradeCards()).toEqual([]);
@@ -88,17 +90,14 @@ describe('upgradeStorage', () => {
     expect(values.has('game.upgrade-generation.v1')).toBe(false);
     expect(values.has('game.upgrade-generation.v2')).toBe(false);
     expect(values.has('game.upgrade-generation.v3')).toBe(false);
+    expect(values.has('game.upgrade-generation.v4')).toBe(false);
   });
 
   it('rejects the previous generation json shape instead of migrating it', () => {
     const values = installLocalStorage();
     const legacy = { ...cloneUpgradeGenerationConfig() } as Record<string, unknown>;
-    delete legacy.parametersPerCard;
-    values.set('game.upgrade-generation.v4', JSON.stringify({
-      ...legacy,
-      minParametersPerCard: 1,
-      maxParametersPerCard: 1,
-    }));
+    delete legacy.maxParametersPerEffect;
+    values.set('game.upgrade-generation.v5', JSON.stringify(legacy));
 
     expect(loadUpgradeGenerationConfig()).toEqual(DEFAULT_UPGRADE_GENERATION_CONFIG);
   });

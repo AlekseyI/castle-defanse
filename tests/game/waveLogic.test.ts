@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MapDefinition } from '../../src/editor/maps/types';
+import { createEmptyUnitAnimations } from '../../src/editor/units/unitAnimationLogic';
 import type { UnitDefinition } from '../../src/editor/units/types';
 import {
   getRuntimeSpawnBlock,
@@ -164,9 +165,12 @@ describe('waveLogic', () => {
       name: 'Орк',
       hp: 100,
       damage: 10,
+      damageSourceId: 'fire',
       speed: 20,
       coinsOnDeath: 1,
       traits: ['boss'],
+      animationSpeed: 1,
+      animations: createEmptyUnitAnimations(),
     };
     const runtime = getRuntimeUnit(unit, map.endless, 2);
 
@@ -177,15 +181,38 @@ describe('waveLogic', () => {
     expect(unit).toMatchObject({ hp: 100, damage: 10, speed: 20, traits: ['boss'] });
   });
 
+  it('preserves ranged attack settings in runtime units', () => {
+    const unit: UnitDefinition = {
+      id: 'archer',
+      name: 'Лучник',
+      hp: 80,
+      damage: 12,
+      damageSourceId: 'fire',
+      speed: 24,
+      coinsOnDeath: 2,
+      traits: ['ranged'],
+      attackStartPathPercent: 60,
+      animationSpeed: 1,
+      animations: createEmptyUnitAnimations(),
+    };
+
+    const runtime = getRuntimeUnit(unit, map.endless, 1);
+    expect(runtime.traits).toEqual(['ranged']);
+    expect(runtime.attackStartPathPercent).toBe(60);
+  });
+
   it('applies selected unit trait multipliers before endless scaling', () => {
     const unit: UnitDefinition = {
       id: 'elite',
       name: 'Элитный',
       hp: 100,
       damage: 10,
+      damageSourceId: 'fire',
       speed: 20,
       coinsOnDeath: 3,
       traits: ['healthy', 'strong', 'fast', 'generous'],
+      animationSpeed: 1,
+      animations: createEmptyUnitAnimations(),
       traitMultipliers: {
         hp: 2,
         damage: 1.5,
@@ -209,9 +236,12 @@ describe('waveLogic', () => {
       name: 'Танк',
       hp: 100,
       damage: 10,
+      damageSourceId: 'fire',
       speed: 20,
       coinsOnDeath: 1,
       traits: ['armored'],
+      animationSpeed: 1,
+      animations: createEmptyUnitAnimations(),
       traitMultipliers: { protection: 2 },
       damageProtection: {
         fire: 40,

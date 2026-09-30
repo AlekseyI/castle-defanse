@@ -1,14 +1,18 @@
 import { DEFAULT_UNITS } from './defaultUnits';
+import { cloneUnitAnimations } from './unitAnimationLogic';
 import {
+  UNIT_ANIMATION_TYPES,
   UNIT_TRAITS,
   type DamageProtection,
+  type UnitAnimationFrame,
+  type UnitAnimations,
   type UnitDefinition,
   type UnitImage,
   type UnitTrait,
   type UnitTraitMultipliers,
 } from './types';
 
-const STORAGE_KEY = 'game.units.v8';
+const STORAGE_KEY = 'game.units.v11';
 
 function hasOnlyFields(value: Record<string, unknown>, fields: string[]): boolean {
   return Object.keys(value).every((key) => fields.includes(key));
@@ -21,6 +25,27 @@ function isUnitImage(value: unknown): value is UnitImage {
     hasOnlyFields(image, ['name', 'src']) &&
     typeof image.name === 'string' &&
     typeof image.src === 'string'
+  );
+}
+
+function isUnitAnimationFrame(value: unknown): value is UnitAnimationFrame {
+  if (!value || typeof value !== 'object') return false;
+  const frame = value as Record<string, unknown>;
+  return (
+    hasOnlyFields(frame, ['id', 'name', 'src']) &&
+    typeof frame.id === 'string' && frame.id.length > 0 &&
+    typeof frame.name === 'string' &&
+    typeof frame.src === 'string' && frame.src.length > 0
+  );
+}
+
+function isUnitAnimations(value: unknown): value is UnitAnimations {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const animations = value as Record<string, unknown>;
+  if (!hasOnlyFields(animations, [...UNIT_ANIMATION_TYPES])) return false;
+
+  return UNIT_ANIMATION_TYPES.every(
+    (type) => Array.isArray(animations[type]) && animations[type].every(isUnitAnimationFrame),
   );
 }
 
@@ -58,12 +83,15 @@ function isUnit(value: unknown): value is UnitDefinition {
   if (!value || typeof value !== 'object') return false;
 
   const unit = value as Record<string, unknown>;
-  if (!hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'coinsOnDeath', 'traits', 'traitMultipliers', 'damageProtection', 'image', 'gameKey'])) return false;
+  if (!hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'damageSourceId', 'coinsOnDeath', 'attackStartPathPercent', 'traits', 'traitMultipliers', 'damageProtection', 'image', 'animationSpeed', 'animations', 'gameKey'])) return false;
   if (typeof unit.id !== 'string' || typeof unit.name !== 'string') return false;
   if (typeof unit.hp !== 'number' || !Number.isFinite(unit.hp)) return false;
   if (typeof unit.speed !== 'number' || !Number.isFinite(unit.speed)) return false;
   if (typeof unit.damage !== 'number' || !Number.isFinite(unit.damage)) return false;
+  if (typeof unit.damageSourceId !== 'string' || unit.damageSourceId.length === 0) return false;
   if (typeof unit.coinsOnDeath !== 'number' || !Number.isFinite(unit.coinsOnDeath) || unit.coinsOnDeath < 0) return false;
+  if (typeof unit.animationSpeed !== 'number' || !Number.isFinite(unit.animationSpeed) || unit.animationSpeed < 0.1 || unit.animationSpeed > 100) return false;
+  if (!isUnitAnimations(unit.animations)) return false;
   if (!Array.isArray(unit.traits) || !unit.traits.every(isUnitTrait) || new Set(unit.traits).size !== unit.traits.length) return false;
   if (unit.traitMultipliers !== undefined && !isUnitTraitMultipliers(unit.traitMultipliers)) return false;
   if (unit.damageProtection !== undefined && !isDamageProtection(unit.damageProtection)) return false;
@@ -71,6 +99,18 @@ function isUnit(value: unknown): value is UnitDefinition {
   if (unit.gameKey !== undefined && typeof unit.gameKey !== 'string') return false;
 
   const traits = unit.traits as UnitTrait[];
+  const isRanged = traits.includes('ranged');
+  if (isRanged) {
+    if (
+      typeof unit.attackStartPathPercent !== 'number' ||
+      !Number.isFinite(unit.attackStartPathPercent) ||
+      unit.attackStartPathPercent < 0 ||
+      unit.attackStartPathPercent > 100
+    ) return false;
+  } else if (unit.attackStartPathPercent !== undefined) {
+    return false;
+  }
+
   const multipliers = unit.traitMultipliers as UnitTraitMultipliers | undefined;
   const expectedMultiplierKeys: Array<keyof UnitTraitMultipliers> = [];
   if (traits.includes('healthy')) expectedMultiplierKeys.push('hp');
@@ -93,6 +133,7 @@ function cloneDefaults(): UnitDefinition[] {
     traitMultipliers: unit.traitMultipliers ? { ...unit.traitMultipliers } : undefined,
     damageProtection: unit.damageProtection ? { ...unit.damageProtection } : undefined,
     image: unit.image ? { ...unit.image } : undefined,
+    animations: cloneUnitAnimations(unit.animations),
   }));
 }
 

@@ -31,3 +31,27 @@ export function formatDamagePopup(hitAmount: number, critical: boolean, critical
   if (!critical) return damage;
   return `${damage} ×${formatDamageAmount(criticalMultiplier)}`;
 }
+
+export interface CastleAttackAdvance {
+  attacks: number;
+  nextAttackIn: number;
+}
+
+export function advanceCastleAttack(
+  nextAttackIn: number,
+  deltaSeconds: number,
+  intervalSeconds = 1,
+  attackSpeedMultiplier = 1,
+): CastleAttackAdvance {
+  const interval = Math.max(Number.EPSILON, intervalSeconds);
+  const speedMultiplier = Math.max(0, attackSpeedMultiplier);
+  let remaining = Math.max(0, nextAttackIn) - Math.max(0, deltaSeconds) * speedMultiplier;
+
+  if (remaining > 0) {
+    return { attacks: 0, nextAttackIn: remaining };
+  }
+
+  const attacks = 1 + Math.floor(-remaining / interval);
+  remaining += attacks * interval;
+  return { attacks, nextAttackIn: remaining };
+}

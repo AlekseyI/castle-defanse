@@ -9,9 +9,15 @@ import type { DamageSource } from '../editor/damageSources/types';
 import { loadUpgradeCards, loadUpgradeGenerationConfig } from '../editor/upgrades/upgradeStorage';
 import type { UpgradeCardDefinition, UpgradeGenerationConfig } from '../editor/upgrades/types';
 import { hasTrait } from '../editor/units/unitLogic';
-import type { UnitDefinition, UnitTrait } from '../editor/units/types';
+import type { UnitAnimationType, UnitDefinition, UnitTrait } from '../editor/units/types';
+import {
+  getUnitAnimationDuration,
+  getUnitAnimationFrameIndex,
+  getUnitAnimationFrames,
+  hasUnitAnimationFrames,
+} from '../editor/units/unitAnimationLogic';
 import type { TileKind } from './types';
-import { getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
+import { getEnemyAttackY, getEnemySpawnY, getEnemySpeedScale } from './movementLogic';
 import { getRuntimeSpawnBlock, getRuntimeUnit, getRuntimeWave, getWaveBlockStep } from './waveLogic';
 import { createUnitLookup, getDamageAfterProtection } from './unitRuntime';
 import { useGameStore } from '../store/gameStore';
@@ -25,7 +31,7 @@ import {
 } from './upgrades/upgradeRewardLogic';
 import { SpellEffects } from './effects/SpellEffects';
 import { PeriodicDamageAura } from './effects/PeriodicDamageAura';
-import { formatDamagePopup, resolveDamageHit } from './damageLogic';
+import { advanceCastleAttack, formatDamagePopup, resolveDamageHit } from './damageLogic';
 import {
   advanceAreaEffect,
   collectNewAreaTargets,
@@ -42,6 +48,11 @@ import {
   type ActivePeriodicDamage,
 } from './periodicDamageLogic';
 
+interface EnemyAnimationTexture {
+  texture: Texture;
+  sourceSize: number;
+}
+
 interface Enemy {
   root: Container;
   body: Graphics | Sprite;
@@ -52,11 +63,21 @@ interface Enemy {
   speedScale: number;
   spawnY: number;
   damage: number;
+  damageSourceId: string;
+  attackStartPathPercent: number;
+  nextCastleAttackIn: number;
   coinsOnDeath: number;
   damageProtection?: UnitDefinition['damageProtection'];
   frozenFor: number;
   slowPercent: number;
   traits: UnitDefinition['traits'];
+  radius: number;
+  animationSpeed: number;
+  animations: UnitDefinition['animations'];
+  animationState: UnitAnimationType;
+  animationElapsed: number;
+  animationFrameIndex: number;
+  animationTextures: Map<string, EnemyAnimationTexture>;
 }
 
 interface ActiveBattleAreaEffect extends ActiveAreaEffect<Enemy> {
@@ -104,6 +125,7 @@ export class BattleScene extends Container {
   private backgroundImageHeight = 0;
   private readonly castle = new Container();
   private readonly enemies: Enemy[] = [];
+  private readonly dyingEnemies: Enemy[] = [];
   private readonly activeAreaEffects: ActiveBattleAreaEffect[] = [];
   private readonly activePeriodicDamages: ActiveBattlePeriodicDamage[] = [];
   private readonly activeDamagePopups: ActiveDamagePopup[] = [];
@@ -152,6 +174,7 @@ export class BattleScene extends Container {
       this.map.endless.enabled ? 0 : this.map.waves.length,
       [...this.abilitiesById.keys()],
       this.map.upgradeSettings.maxCardReceives,
+      this.damageSources.map((source) => source.id),
     );
     this.loadMapBackground();
     this.buildCastle();
@@ -185,6 +208,7 @@ export class BattleScene extends Container {
 
     this.spellEffects.update(dt);
     this.updateDamagePopups(dt);
+    this.updateDyingEnemies(dt);
 
     if (state.phase !== 'playing') return;
 
@@ -335,7 +359,7 @@ export class BattleScene extends Container {
 
   private spawnEnemy(unit: UnitDefinition) {
     const isBoss = hasTrait(unit, 'boss');
-    const { hp, speed, damage, coinsOnDeath, damageProtection } = unit;
+    const { hp, speed, damage, damageSourceId, coinsOnDeath, damageProtection } = unit;
     const root = new Container();
     const body = new Graphics();
     const hpBar = new Graphics();
@@ -347,7 +371,8 @@ export class BattleScene extends Container {
       .stroke({ color: isBoss ? 0xf5d0fe : 0x365314, width: isBoss ? 4 : 3 });
     root.addChild(body, hpBar);
 
-    if (!unit.image?.src) {
+    const hasAnimationFrames = hasUnitAnimationFrames(unit.animations);
+    if (!hasAnimationFrames) {
       const eyeY = isBoss ? -6 : -4;
       const eyeX = isBoss ? 10 : 7;
       const eyeRadius = isBoss ? 3.5 : 2.5;
@@ -386,40 +411,96 @@ export class BattleScene extends Container {
       speedScale,
       spawnY,
       damage,
+      damageSourceId,
+      attackStartPathPercent: hasTrait(unit, 'ranged') ? (unit.attackStartPathPercent ?? 100) : 100,
+      nextCastleAttackIn: 1,
       coinsOnDeath,
       damageProtection,
       frozenFor: 0,
       slowPercent: 0,
       traits: [...unit.traits],
+      radius,
+      animationSpeed: unit.animationSpeed,
+      animations: unit.animations,
+      animationState: 'move',
+      animationElapsed: 0,
+      animationFrameIndex: 0,
+      animationTextures: new Map(),
     };
     this.enemies.push(enemy);
     this.redrawEnemyHp(enemy);
 
-    if (unit.image?.src) this.applyEnemyImage(enemy, unit.image.src, radius);
+    if (hasAnimationFrames) this.preloadEnemyAnimations(enemy);
   }
 
-  private applyEnemyImage(enemy: Enemy, src: string, radius: number) {
-    const image = new Image();
+  private preloadEnemyAnimations(enemy: Enemy) {
+    const sources = new Set(
+      Object.values(enemy.animations).flatMap((frames) => frames.map((frame) => frame.src)),
+    );
 
-    image.onload = () => {
-      if (enemy.root.destroyed) return;
+    for (const src of sources) {
+      const image = new Image();
+      image.onload = () => {
+        if (enemy.root.destroyed) return;
+        enemy.animationTextures.set(src, {
+          texture: Texture.from(image),
+          sourceSize: Math.max(image.naturalWidth, image.naturalHeight),
+        });
+        this.refreshEnemyAnimationFrame(enemy);
+      };
+      image.src = src;
+    }
+  }
 
-      const texture = Texture.from(image);
-      const sprite = new Sprite(texture);
-      const sourceSize = Math.max(image.naturalWidth, image.naturalHeight);
-      const targetSize = radius * 2;
+  private refreshEnemyAnimationFrame(enemy: Enemy) {
+    const frames = getUnitAnimationFrames(enemy.animations, enemy.animationState);
+    const frame = frames[enemy.animationFrameIndex];
+    if (!frame) return;
 
+    const asset = enemy.animationTextures.get(frame.src);
+    if (!asset) return;
+
+    let sprite: Sprite;
+    if (enemy.body instanceof Sprite) {
+      sprite = enemy.body;
+      sprite.texture = asset.texture;
+    } else {
+      sprite = new Sprite(asset.texture);
       sprite.anchor.set(0.5);
-      if (sourceSize > 0) sprite.scale.set(targetSize / sourceSize);
-      sprite.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
-
       enemy.root.addChildAt(sprite, 0);
       enemy.root.removeChild(enemy.body);
       enemy.body.destroy();
       enemy.body = sprite;
-    };
+    }
 
-    image.src = src;
+    if (asset.sourceSize > 0) sprite.scale.set((enemy.radius * 2) / asset.sourceSize);
+    sprite.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
+  }
+
+  private updateEnemyAnimation(enemy: Enemy, dt: number, state: UnitAnimationType, loop = true): boolean {
+    const frames = getUnitAnimationFrames(enemy.animations, state);
+    if (frames.length === 0) return !loop;
+
+    if (enemy.animationState !== state) {
+      enemy.animationState = state;
+      enemy.animationElapsed = 0;
+      enemy.animationFrameIndex = 0;
+      this.refreshEnemyAnimationFrame(enemy);
+    } else {
+      enemy.animationElapsed += dt;
+      const nextFrameIndex = getUnitAnimationFrameIndex(
+        enemy.animationElapsed,
+        frames.length,
+        enemy.animationSpeed,
+        loop,
+      );
+      if (nextFrameIndex !== enemy.animationFrameIndex) {
+        enemy.animationFrameIndex = nextFrameIndex;
+        this.refreshEnemyAnimationFrame(enemy);
+      }
+    }
+
+    return !loop && enemy.animationElapsed >= getUnitAnimationDuration(frames.length, enemy.animationSpeed);
   }
 
   private updateEnemies(dt: number) {
@@ -429,11 +510,20 @@ export class BattleScene extends Container {
       if (enemy.frozenFor <= 0) enemy.slowPercent = 0;
       const speedMultiplier = enemy.frozenFor > 0 ? Math.max(0, 1 - enemy.slowPercent / 100) : 1;
       enemy.body.tint = enemy.frozenFor > 0 ? 0xaadfff : 0xffffff;
-      enemy.root.y += enemy.speed * enemy.speedScale * speedMultiplier * dt;
+      const castleEdgeY = this.castleY - 30;
+      const attackY = getEnemyAttackY(enemy.spawnY, castleEdgeY, enemy.attackStartPathPercent);
+      if (enemy.root.y < attackY) {
+        this.updateEnemyAnimation(enemy, dt, 'move');
+        enemy.root.y = Math.min(attackY, enemy.root.y + enemy.speed * enemy.speedScale * speedMultiplier * dt);
+        continue;
+      }
 
-      if (enemy.root.y >= this.castleY - 30) {
-        useGameStore.getState().damageCastle(enemy.damage);
-        this.removeEnemy(enemy, i, 'reached-base');
+      enemy.root.y = attackY;
+      this.updateEnemyAnimation(enemy, dt, 'attack');
+      const attack = advanceCastleAttack(enemy.nextCastleAttackIn, dt, 1, speedMultiplier);
+      enemy.nextCastleAttackIn = attack.nextAttackIn;
+      for (let attackIndex = 0; attackIndex < attack.attacks; attackIndex += 1) {
+        useGameStore.getState().damageCastle(enemy.damage, enemy.damageSourceId);
       }
     }
   }
@@ -495,7 +585,6 @@ export class BattleScene extends Container {
     }
 
     this.enemies.splice(index, 1);
-    enemy.root.destroy({ children: true });
     if (reason === 'killed') {
       useGameStore.getState().addKill(enemy.coinsOnDeath);
       if (earnsBossUpgradeReward(
@@ -505,6 +594,29 @@ export class BattleScene extends Container {
       )) {
         this.bossUpgradeRewardEarned = true;
       }
+
+      if (enemy.animations.death.length > 0) {
+        enemy.frozenFor = 0;
+        enemy.slowPercent = 0;
+        enemy.body.tint = 0xffffff;
+        enemy.animationState = 'death';
+        enemy.animationElapsed = 0;
+        enemy.animationFrameIndex = 0;
+        this.refreshEnemyAnimationFrame(enemy);
+        this.dyingEnemies.push(enemy);
+        return;
+      }
+    }
+
+    enemy.root.destroy({ children: true });
+  }
+
+  private updateDyingEnemies(dt: number) {
+    for (let i = this.dyingEnemies.length - 1; i >= 0; i -= 1) {
+      const enemy = this.dyingEnemies[i];
+      if (!this.updateEnemyAnimation(enemy, dt, 'death', false)) continue;
+      this.dyingEnemies.splice(i, 1);
+      enemy.root.destroy({ children: true });
     }
   }
 
@@ -583,7 +695,7 @@ export class BattleScene extends Container {
             effect.criticalChancePercent,
             effect.criticalMultiplier,
           );
-          state.damageCastle(hit.amount);
+          state.damageCastle(hit.amount, effect.damageSourceId);
         } else {
           targets.forEach((enemy) => {
             if (this.enemies.includes(enemy)) {
@@ -953,6 +1065,10 @@ export class BattleScene extends Container {
       this.enemies[i].root.destroy({ children: true });
     }
     this.enemies.length = 0;
+    for (let i = this.dyingEnemies.length - 1; i >= 0; i -= 1) {
+      this.dyingEnemies[i].root.destroy({ children: true });
+    }
+    this.dyingEnemies.length = 0;
     this.activeAreaEffects.length = 0;
     this.activePeriodicDamages.length = 0;
     for (const popup of this.activeDamagePopups) popup.text.destroy();
@@ -970,6 +1086,7 @@ export class BattleScene extends Container {
       this.map.endless.enabled ? 0 : this.map.waves.length,
       [...this.abilitiesById.keys()],
       this.map.upgradeSettings.maxCardReceives,
+      this.damageSources.map((source) => source.id),
     );
   }
 }

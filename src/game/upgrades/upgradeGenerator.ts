@@ -1,7 +1,11 @@
 import { getAllowedTargets } from '../../editor/abilities/abilityLogic';
 import type { AbilityDefinition, AbilityEffectType, AbilityTargetType } from '../../editor/abilities/types';
 import type { DamageSource } from '../../editor/damageSources/types';
-import { getUpgradeEffectOption, validateUpgradeCard } from '../../editor/upgrades/upgradeLogic';
+import {
+  getUpgradeEffectOption,
+  isUpgradeEffectTypeGeneratableForAbility,
+  validateUpgradeCard,
+} from '../../editor/upgrades/upgradeLogic';
 import type {
   UpgradeAddEffectGenerationRule,
   UpgradeAddEffectType,
@@ -29,6 +33,174 @@ interface Candidate {
   ability: AbilityDefinition;
   type: UpgradeEffectType;
   rule: UpgradeParameterGenerationRule;
+}
+
+const COMPLEMENTARY_PARAMETERS: Partial<Record<UpgradeEffectType, UpgradeEffectType[]>> = {
+  'ability-damage-critical-chance': ['ability-damage-critical-multiplier'],
+  'ability-damage-critical-multiplier': ['ability-damage-critical-chance'],
+  'ability-periodic-critical-chance': ['ability-periodic-critical-multiplier'],
+  'ability-periodic-critical-multiplier': ['ability-periodic-critical-chance'],
+};
+
+const CONFLICTING_PARAMETERS: Partial<Record<UpgradeEffectType, UpgradeEffectType[]>> = {
+  'ability-damage-percent': ['ability-damage-flat'],
+  'ability-damage-target-count': ['ability-damage-area-height'],
+  'ability-periodic-damage-percent': ['ability-periodic-damage-flat'],
+  'ability-periodic-target-count': ['ability-periodic-area-height'],
+  'ability-periodic-duration-percent': ['ability-periodic-duration-flat'],
+  'ability-slow-target-count': ['ability-slow-area-height'],
+  'ability-slow-duration-percent': ['ability-slow-duration-flat'],
+  'ability-heal-percent': ['ability-heal-flat'],
+};
+
+function areComplementaryParameters(left: UpgradeEffectType, right: UpgradeEffectType): boolean {
+  return COMPLEMENTARY_PARAMETERS[left]?.includes(right) === true
+    || COMPLEMENTARY_PARAMETERS[right]?.includes(left) === true;
+}
+
+function parameterFamily(type: UpgradeEffectType): AbilityEffectType | undefined {
+  return getUpgradeEffectOption(type)?.abilityEffectType;
+}
+
+function areConflictingParameters(left: UpgradeEffectType, right: UpgradeEffectType): boolean {
+  return CONFLICTING_PARAMETERS[left]?.includes(right) === true
+    || CONFLICTING_PARAMETERS[right]?.includes(left) === true;
+}
+
+function canAddCandidate(
+  candidate: Candidate,
+  chosen: Candidate[],
+  maxParametersPerEffect: number,
+): boolean {
+  if (chosen.some((selected) => areConflictingParameters(selected.type, candidate.type))) return false;
+
+  const family = parameterFamily(candidate.type);
+  if (!family) return true;
+  const familyCount = chosen.filter((selected) => parameterFamily(selected.type) === family).length;
+  return familyCount < maxParametersPerEffect;
+}
+
+function isCandidateSetCompatible(candidates: Candidate[], maxParametersPerEffect: number): boolean {
+  return candidates.every((candidate, index) => (
+    canAddCandidate(candidate, candidates.slice(0, index), maxParametersPerEffect)
+  ));
+}
+
+function maxCompatibleCandidateCount(candidates: Candidate[], maxParametersPerEffect: number): number {
+  const byFamily = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const family = parameterFamily(candidate.type) ?? candidate.type;
+    const items = byFamily.get(family) ?? [];
+    items.push(candidate);
+    byFamily.set(family, items);
+  }
+
+  let total = 0;
+  for (const items of byFamily.values()) {
+    let best = 0;
+    const chosen: Candidate[] = [];
+
+    const visit = (index: number) => {
+      best = Math.max(best, chosen.length);
+      if (best >= maxParametersPerEffect || index >= items.length) return;
+      if (chosen.length + items.length - index <= best) return;
+
+      for (let itemIndex = index; itemIndex < items.length; itemIndex += 1) {
+        const candidate = items[itemIndex];
+        if (!canAddCandidate(candidate, chosen, maxParametersPerEffect)) continue;
+        chosen.push(candidate);
+        visit(itemIndex + 1);
+        chosen.pop();
+        if (best >= maxParametersPerEffect) return;
+      }
+    };
+
+    visit(0);
+    total += best;
+  }
+
+  return total;
+}
+
+function pickCoherentCandidate(
+  remaining: Candidate[],
+  chosen: Candidate[],
+  slotsLeft: number,
+  maxParametersPerEffect: number,
+  random: () => number,
+): Candidate | undefined {
+  const compatibleRemaining = remaining.filter((candidate) => (
+    canAddCandidate(candidate, chosen, maxParametersPerEffect)
+  ));
+  if (compatibleRemaining.length === 0) return undefined;
+
+  if (chosen.length === 0) {
+    return pickWeighted(compatibleRemaining, (item) => item.rule.weight, random);
+  }
+
+  const complementary = compatibleRemaining.filter((candidate) =>
+    chosen.some((selected) => areComplementaryParameters(selected.type, candidate.type)),
+  );
+  if (complementary.length > 0) {
+    return pickWeighted(complementary, (item) => item.rule.weight, random);
+  }
+
+  const safeRemaining = slotsLeft === 1
+    ? compatibleRemaining.filter((candidate) => !compatibleRemaining.some((other) => (
+      other !== candidate && areComplementaryParameters(candidate.type, other.type)
+    )))
+    : compatibleRemaining;
+  const candidatePool = safeRemaining.length > 0 ? safeRemaining : compatibleRemaining;
+
+  const selectedFamilies = new Set(chosen.map((candidate) => parameterFamily(candidate.type)));
+  const sameFamily = candidatePool.filter((candidate) => selectedFamilies.has(parameterFamily(candidate.type)));
+  if (sameFamily.length > 0) {
+    return pickWeighted(sameFamily, (item) => item.rule.weight, random);
+  }
+
+  return pickWeighted(candidatePool, (item) => item.rule.weight, random);
+}
+
+function findComplementaryRepair(
+  chosen: Candidate[],
+  remaining: Candidate[],
+  maxParametersPerEffect: number,
+): { replacementIndex: number; counterpart: Candidate } | undefined {
+  for (let orphanIndex = 0; orphanIndex < chosen.length; orphanIndex += 1) {
+    const orphan = chosen[orphanIndex];
+    const alreadyPaired = chosen.some((candidate, index) => (
+      index !== orphanIndex && areComplementaryParameters(orphan.type, candidate.type)
+    ));
+    if (alreadyPaired) continue;
+
+    const counterpart = remaining.find((candidate) => areComplementaryParameters(orphan.type, candidate.type));
+    if (!counterpart) continue;
+
+    const replacementIndexes = chosen
+      .map((candidate, index) => ({ candidate, index }))
+      .filter(({ index }) => index !== orphanIndex)
+      .filter(({ candidate, index }) => !chosen.some((other, otherIndex) => (
+        otherIndex !== index && areComplementaryParameters(candidate.type, other.type)
+      )))
+      .filter(({ index }) => isCandidateSetCompatible(
+        chosen.map((candidate, candidateIndex) => (
+          candidateIndex === index ? counterpart : candidate
+        )),
+        maxParametersPerEffect,
+      ))
+      .sort((left, right) => {
+        const leftSameFamily = parameterFamily(left.candidate.type) === parameterFamily(orphan.type) ? 1 : 0;
+        const rightSameFamily = parameterFamily(right.candidate.type) === parameterFamily(orphan.type) ? 1 : 0;
+        return leftSameFamily - rightSameFamily;
+      });
+
+    const replacementIndex = replacementIndexes[0]?.index;
+    if (replacementIndex !== undefined) {
+      return { replacementIndex, counterpart };
+    }
+  }
+
+  return undefined;
 }
 
 function randomIndex(length: number, random: () => number): number {
@@ -102,11 +274,7 @@ function pickRangeValue(range: UpgradeNumberRange, random: () => number, allowZe
 }
 
 function abilitySupportsParameter(ability: AbilityDefinition, type: UpgradeEffectType): boolean {
-  if (!ability.allowedUpgradeParameters.includes(type)) return false;
-  const option = getUpgradeEffectOption(type);
-  if (!option) return false;
-  if (option.valueKind === 'add-effect') return true;
-  return ability.effects.some((effect) => effect.type === option.abilityEffectType);
+  return isUpgradeEffectTypeGeneratableForAbility(ability, type);
 }
 
 function getOptionValues(candidate: Candidate, damageSources: DamageSource[]): string[] {
@@ -367,6 +535,20 @@ function createReceiveKey(abilityId: string, candidates: Candidate[]): string {
   return `${abilityId}:${types.join('+')}`;
 }
 
+function createGeneratedParametersKey(card: UpgradeCardDefinition): string {
+  const effects = [...card.effects]
+    .sort((left, right) => {
+      const abilityCompare = left.abilityId.localeCompare(right.abilityId);
+      return abilityCompare !== 0 ? abilityCompare : left.type.localeCompare(right.type);
+    })
+    .map((effect) => ({
+      type: effect.type,
+      abilityId: effect.abilityId,
+      value: effect.value,
+    }));
+  return JSON.stringify(effects);
+}
+
 function createGeneratedCard(
   available: Candidate[],
   rarity: UpgradeRarity,
@@ -378,6 +560,7 @@ function createGeneratedCard(
   random: () => number,
 ): { card: UpgradeCardDefinition; candidates: Candidate[] } | undefined {
   const { min, max } = getParameterCountBounds(config, rarity);
+  const maxParametersPerEffect = Math.max(1, Math.floor(config.maxParametersPerEffect));
   const byAbility = new Map<string, Candidate[]>();
   for (const candidate of available) {
     const current = byAbility.get(candidate.ability.id) ?? [];
@@ -386,8 +569,12 @@ function createGeneratedCard(
   }
 
   const abilities = Array.from(byAbility.entries())
-    .filter(([, items]) => items.length >= min)
-    .map(([abilityId, items]) => ({ abilityId, items }));
+    .map(([abilityId, items]) => ({
+      abilityId,
+      items,
+      maxCompatibleCount: maxCompatibleCandidateCount(items, maxParametersPerEffect),
+    }))
+    .filter((entry) => entry.maxCompatibleCount >= min);
   if (abilities.length === 0) return undefined;
 
   const attempts = Math.max(8, abilities.length * 4);
@@ -400,13 +587,19 @@ function createGeneratedCard(
     );
     if (!abilityChoice) return undefined;
 
-    const desiredCount = randomInteger(min, Math.min(max, abilityChoice.items.length), random);
+    const desiredCount = randomInteger(min, Math.min(max, abilityChoice.maxCompatibleCount), random);
     const remaining = [...abilityChoice.items];
     const chosen: Candidate[] = [];
     const effects: UpgradeEffect[] = [];
 
     while (chosen.length < desiredCount && remaining.length > 0) {
-      const candidate = pickWeighted(remaining, (item) => item.rule.weight, random);
+      const candidate = pickCoherentCandidate(
+        remaining,
+        chosen,
+        desiredCount - chosen.length,
+        maxParametersPerEffect,
+        random,
+      );
       if (!candidate) break;
       remaining.splice(remaining.indexOf(candidate), 1);
       const effect = createEffect(candidate, rarity, damageSources, random);
@@ -415,7 +608,25 @@ function createGeneratedCard(
       effects.push(effect);
     }
 
+    while (true) {
+      const repair = findComplementaryRepair(chosen, remaining, maxParametersPerEffect);
+      if (!repair) break;
+
+      const counterpartEffect = createEffect(repair.counterpart, rarity, damageSources, random);
+      if (!counterpartEffect) break;
+
+      const removedCandidate = chosen[repair.replacementIndex];
+      const counterpartIndex = remaining.indexOf(repair.counterpart);
+      if (counterpartIndex < 0) break;
+
+      remaining.splice(counterpartIndex, 1);
+      remaining.push(removedCandidate);
+      chosen[repair.replacementIndex] = repair.counterpart;
+      effects[repair.replacementIndex] = counterpartEffect;
+    }
+
     if (chosen.length < min) continue;
+    if (!isCandidateSetCompatible(chosen, maxParametersPerEffect)) continue;
     const receiveKey = createReceiveKey(abilityChoice.abilityId, chosen);
     if (blockedKeys.has(receiveKey) || (counts[receiveKey] ?? 0) >= maxCardReceives) {
       blockedKeys.add(receiveKey);
@@ -463,6 +674,7 @@ export function generateUpgradeChoices(
   if (candidates.length === 0) return [];
 
   const selectedAcrossCards: Candidate[] = [];
+  const usedParameterKeys = new Set<string>();
   const cards: UpgradeCardDefinition[] = [];
   const maxAttempts = Math.max(20, targetCount * 20);
   let attempts = 0;
@@ -473,11 +685,16 @@ export function generateUpgradeChoices(
       if (config.rarityWeights[rarity] <= 0) return false;
       const available = availableCandidates(candidates, rarity, damageSources, config, selectedAcrossCards);
       const { min } = getParameterCountBounds(config, rarity);
-      const abilityCounts = new Map<string, number>();
+      const maxParametersPerEffect = Math.max(1, Math.floor(config.maxParametersPerEffect));
+      const candidatesByAbility = new Map<string, Candidate[]>();
       for (const candidate of available) {
-        abilityCounts.set(candidate.ability.id, (abilityCounts.get(candidate.ability.id) ?? 0) + 1);
+        const items = candidatesByAbility.get(candidate.ability.id) ?? [];
+        items.push(candidate);
+        candidatesByAbility.set(candidate.ability.id, items);
       }
-      return Array.from(abilityCounts.values()).some((count) => count >= min);
+      return Array.from(candidatesByAbility.values()).some((items) => (
+        maxCompatibleCandidateCount(items, maxParametersPerEffect) >= min
+      ));
     });
     const rarity = pickWeighted(availableRarities, (item) => config.rarityWeights[item], random);
     if (!rarity) break;
@@ -495,7 +712,11 @@ export function generateUpgradeChoices(
     );
     if (!generated) break;
 
+    const parameterKey = createGeneratedParametersKey(generated.card);
+    if (usedParameterKeys.has(parameterKey)) continue;
+
     cards.push(generated.card);
+    usedParameterKeys.add(parameterKey);
     selectedAcrossCards.push(...generated.candidates);
   }
 

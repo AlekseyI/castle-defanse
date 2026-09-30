@@ -9,6 +9,8 @@ import {
   changeAddedTargetType,
   getCompatibleUpgradeEffectTypes,
   getDefaultUpgradeEffectValue,
+  getGeneratableUpgradeEffectTypes,
+  getGroupedUpgradeEffectOptions,
   normalizeUpgradeCard,
   removeUpgradeParametersFromCards,
   validateUpgradeCard,
@@ -103,6 +105,87 @@ describe('upgradeLogic', () => {
       'ability-damage-percent',
       'ability-add-slow',
     ]);
+  });
+
+  it('groups upgrade parameters by their ability effect', () => {
+    const groups = getGroupedUpgradeEffectOptions();
+
+    expect(groups.map((group) => group.label)).toEqual([
+      'Основной урон',
+      'Периодический урон',
+      'Замедление',
+      'Лечение',
+    ]);
+    expect(groups.find((group) => group.abilityEffectType === 'slow')?.options.map((option) => option.type)).toEqual([
+      'ability-add-slow',
+      'ability-slow-percent',
+      'ability-slow-target-type',
+      'ability-slow-target-count',
+      'ability-slow-area-height',
+      'ability-slow-duration-percent',
+      'ability-slow-duration-flat',
+    ]);
+  });
+
+  it('keeps only requested parameters and removes empty groups', () => {
+    const groups = getGroupedUpgradeEffectOptions([
+      'ability-damage-percent',
+      'ability-add-slow',
+      'ability-slow-area-height',
+    ]);
+
+    expect(groups.map((group) => ({
+      label: group.label,
+      types: group.options.map((option) => option.type),
+    }))).toEqual([
+      { label: 'Основной урон', types: ['ability-damage-percent'] },
+      { label: 'Замедление', types: ['ability-add-slow', 'ability-slow-area-height'] },
+    ]);
+  });
+
+  it('omits parameters from the generator editor when every ability excludes them', () => {
+    const withoutTargetTypes = abilities.map((ability) => ({
+      ...ability,
+      allowedUpgradeParameters: ability.allowedUpgradeParameters.filter((type) => (
+        type !== 'ability-damage-target-type' &&
+        type !== 'ability-periodic-target-type' &&
+        type !== 'ability-slow-target-type'
+      )),
+    }));
+
+    const visibleTypes = getGeneratableUpgradeEffectTypes(withoutTargetTypes);
+
+    expect(visibleTypes).not.toContain('ability-damage-target-type');
+    expect(visibleTypes).not.toContain('ability-periodic-target-type');
+    expect(visibleTypes).not.toContain('ability-slow-target-type');
+    expect(visibleTypes).toContain('ability-damage-percent');
+  });
+
+  it('hides a parameter when it is allowed only on abilities that cannot generate it', () => {
+    const slowAbility: AbilityDefinition = {
+      id: 'ice',
+      name: 'Лёд',
+      effects: [{ type: 'slow', slowPercent: 30, duration: 3, target: { type: 'all-enemies' } }],
+      allowedUpgradeParameters: [],
+      visualEffect: 'ice',
+      color: '#00aaff',
+    };
+
+    const visibleTypes = getGeneratableUpgradeEffectTypes([slowAbility, ...abilities]);
+
+    expect(visibleTypes).not.toContain('ability-slow-duration-flat');
+  });
+
+  it('keeps a parameter visible in the generator editor when at least one ability allows it', () => {
+    const targetType = 'ability-damage-target-type' as const;
+    const mixedAbilities = abilities.map((ability, index) => ({
+      ...ability,
+      allowedUpgradeParameters: index === 0
+        ? ability.allowedUpgradeParameters
+        : ability.allowedUpgradeParameters.filter((type) => type !== targetType),
+    }));
+
+    expect(getGeneratableUpgradeEffectTypes(mixedAbilities)).toContain(targetType);
   });
 
   it('rejects a parameter that is not allowed for the selected ability', () => {

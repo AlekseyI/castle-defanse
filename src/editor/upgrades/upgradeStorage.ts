@@ -12,9 +12,14 @@ import type {
 } from './types';
 import { UPGRADE_EFFECT_TYPES } from './types';
 
-const GENERATION_STORAGE_KEY = 'game.upgrade-generation.v4';
+const GENERATION_STORAGE_KEY = 'game.upgrade-generation.v5';
 const CARDS_STORAGE_KEY = 'game.upgrade-cards.v1';
-const LEGACY_GENERATION_STORAGE_KEYS = ['game.upgrade-generation.v1', 'game.upgrade-generation.v2', 'game.upgrade-generation.v3'];
+const LEGACY_GENERATION_STORAGE_KEYS = [
+  'game.upgrade-generation.v1',
+  'game.upgrade-generation.v2',
+  'game.upgrade-generation.v3',
+  'game.upgrade-generation.v4',
+];
 const LEGACY_CARDS_STORAGE_KEY = 'game.upgrades.v3';
 const RARITIES: UpgradeRarity[] = ['common', 'rare', 'epic', 'legendary'];
 const TARGET_TYPES = new Set(['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle']);
@@ -129,6 +134,7 @@ function isConfig(value: unknown): value is UpgradeGenerationConfig {
     typeof config.enabled !== 'boolean' ||
     !isFiniteNumber(config.previewCardCount) || !Number.isInteger(config.previewCardCount) || config.previewCardCount < 1 ||
     !isParameterCountRanges(config.parametersPerCard) ||
+    !isFiniteNumber(config.maxParametersPerEffect) || !Number.isInteger(config.maxParametersPerEffect) || config.maxParametersPerEffect < 1 ||
     typeof config.allowDuplicateParameters !== 'boolean' ||
     typeof config.allowSameAbility !== 'boolean' ||
     !config.rarityWeights || typeof config.rarityWeights !== 'object' || Array.isArray(config.rarityWeights) ||

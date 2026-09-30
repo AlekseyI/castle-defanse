@@ -32,6 +32,12 @@ export interface UpgradeEffectOption {
   valueKind: UpgradeEffectValueKind;
 }
 
+export interface UpgradeEffectOptionGroup {
+  abilityEffectType: AbilityEffectType;
+  label: string;
+  options: UpgradeEffectOption[];
+}
+
 const UPGRADE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const RARITIES = new Set<UpgradeRarity>(['common', 'rare', 'epic', 'legendary']);
@@ -70,6 +76,26 @@ export const UPGRADE_EFFECT_OPTIONS: UpgradeEffectOption[] = [
   { type: 'ability-heal-flat', label: 'Лечение способности, значение', abilityEffectType: 'heal', valueKind: 'number' },
 ];
 
+const UPGRADE_EFFECT_GROUPS: Array<{ abilityEffectType: AbilityEffectType; label: string }> = [
+  { abilityEffectType: 'damage', label: 'Основной урон' },
+  { abilityEffectType: 'periodic-damage', label: 'Периодический урон' },
+  { abilityEffectType: 'slow', label: 'Замедление' },
+  { abilityEffectType: 'heal', label: 'Лечение' },
+];
+
+export function getGroupedUpgradeEffectOptions(
+  types?: readonly UpgradeEffectType[],
+): UpgradeEffectOptionGroup[] {
+  const allowedTypes = types ? new Set(types) : null;
+  return UPGRADE_EFFECT_GROUPS.map((group) => ({
+    ...group,
+    options: UPGRADE_EFFECT_OPTIONS.filter((option) => (
+      option.abilityEffectType === group.abilityEffectType &&
+      (!allowedTypes || allowedTypes.has(option.type))
+    )),
+  })).filter((group) => group.options.length > 0);
+}
+
 export function getUpgradeEffectOption(type: UpgradeEffectType): UpgradeEffectOption | undefined {
   return UPGRADE_EFFECT_OPTIONS.find((option) => option.type === type);
 }
@@ -78,19 +104,41 @@ function getAbilityEffect(ability: AbilityDefinition | undefined, type: AbilityE
   return ability?.effects.find((effect) => effect.type === type);
 }
 
+export function isUpgradeEffectTypeAllowedForAbility(
+  ability: AbilityDefinition | undefined,
+  type: UpgradeEffectType,
+): boolean {
+  return Boolean(ability?.allowedUpgradeParameters.includes(type));
+}
+
 export function getCompatibleUpgradeEffectTypes(ability?: AbilityDefinition): UpgradeEffectType[] {
   if (!ability) return [];
-  const allowedParameters = new Set(ability.allowedUpgradeParameters);
   return UPGRADE_EFFECT_OPTIONS
     .map((option) => option.type)
-    .filter((type) => allowedParameters.has(type));
+    .filter((type) => isUpgradeEffectTypeAllowedForAbility(ability, type));
+}
+
+export function isUpgradeEffectTypeGeneratableForAbility(
+  ability: AbilityDefinition | undefined,
+  type: UpgradeEffectType,
+): boolean {
+  if (!ability || !isUpgradeEffectTypeAllowedForAbility(ability, type)) return false;
+  const option = getUpgradeEffectOption(type);
+  if (!option) return false;
+  return option.valueKind === 'add-effect' || Boolean(getAbilityEffect(ability, option.abilityEffectType));
+}
+
+export function getGeneratableUpgradeEffectTypes(abilities: AbilityDefinition[]): UpgradeEffectType[] {
+  return UPGRADE_EFFECT_OPTIONS
+    .map((option) => option.type)
+    .filter((type) => abilities.some((ability) => isUpgradeEffectTypeGeneratableForAbility(ability, type)));
 }
 
 export function isUpgradeEffectCompatible(effect: UpgradeEffect, ability?: AbilityDefinition): boolean {
   return Boolean(
     ability &&
     getUpgradeEffectOption(effect.type) &&
-    ability.allowedUpgradeParameters.includes(effect.type),
+    isUpgradeEffectTypeAllowedForAbility(ability, effect.type),
   );
 }
 
