@@ -3,6 +3,7 @@ import { cloneUpgradeGenerationConfig } from '../../../src/editor/upgrades/defau
 import type { AbilityDefinition } from '../../../src/editor/abilities/types';
 import type { UpgradeCardDefinition, UpgradeEffectType, UpgradeGenerationConfig } from '../../../src/editor/upgrades/types';
 import { buildUpgradeChoices, generateUpgradeChoices } from '../../../src/game/upgrades/upgradeGenerator';
+import { addUpgradeEffectToModifiers, type AbilityRuntimeModifiers } from '../../../src/game/upgrades/upgradeCalculator';
 
 function only(config: UpgradeGenerationConfig, ...types: UpgradeEffectType[]) {
   const enabled = new Set(types);
@@ -484,6 +485,218 @@ describe('upgradeGenerator', () => {
     };
 
     expect(generateUpgradeChoices(config, [misleadingAbility], [], {}, 1, 5, () => 0)).toEqual([]);
+  });
+
+  it('starts generating modifiers after the required effect is added during the run', () => {
+    const config = cloneUpgradeGenerationConfig();
+    only(config, 'ability-periodic-damage-flat');
+    const ability: AbilityDefinition = {
+      ...fire,
+      allowedUpgradeParameters: ['ability-periodic-damage-flat'],
+    };
+
+    expect(generateUpgradeChoices(config, [ability], [], {}, 1, 5, () => 0)).toEqual([]);
+
+    const modifiers: AbilityRuntimeModifiers = {};
+    addUpgradeEffectToModifiers(modifiers, {
+      type: 'ability-add-periodic-damage',
+      abilityId: ability.id,
+      value: {
+        chancePercent: 25,
+        amount: 4,
+        duration: 2,
+        criticalChancePercent: 0,
+        criticalMultiplier: 1.5,
+        visualColor: '#ff0000',
+        target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
+      },
+    });
+
+    const result = generateUpgradeChoices(config, [ability], [], {}, 1, 5, () => 0, modifiers);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].effects[0]).toMatchObject({
+      type: 'ability-periodic-damage-flat',
+      abilityId: ability.id,
+    });
+  });
+
+  it('uses another active ability when only it has an active critical chance', () => {
+    const config = cloneUpgradeGenerationConfig();
+    only(config, 'ability-damage-critical-multiplier');
+
+    const damageWithoutCrit: AbilityDefinition = {
+      ...fire,
+      id: 'damage-without-crit',
+      allowedUpgradeParameters: ['ability-damage-critical-multiplier'],
+    };
+    const damageWithCrit: AbilityDefinition = {
+      ...fire,
+      id: 'damage-with-crit',
+      effects: [{
+        type: 'damage',
+        amount: 50,
+        damageSourceId: 'fire',
+        criticalChancePercent: 25,
+        criticalMultiplier: 1.5,
+        target: { type: 'nearest-enemies', count: 1 },
+      }],
+      allowedUpgradeParameters: ['ability-damage-critical-multiplier'],
+    };
+
+    const result = generateUpgradeChoices(
+      config,
+      [damageWithoutCrit, damageWithCrit],
+      [],
+      {},
+      1,
+      5,
+      () => 0,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].effects[0].abilityId).toBe(damageWithCrit.id);
+  });
+
+  it('does not generate a critical multiplier alone until critical chance is active', () => {
+    const config = cloneUpgradeGenerationConfig();
+    only(config, 'ability-damage-critical-multiplier');
+    const ability: AbilityDefinition = {
+      ...fire,
+      allowedUpgradeParameters: ['ability-damage-critical-multiplier'],
+    };
+
+    expect(generateUpgradeChoices(config, [ability], [], {}, 1, 5, () => 0)).toEqual([]);
+
+    const modifiers: AbilityRuntimeModifiers = {};
+    addUpgradeEffectToModifiers(modifiers, {
+      type: 'ability-damage-critical-chance',
+      abilityId: ability.id,
+      value: 20,
+    });
+
+    const result = generateUpgradeChoices(config, [ability], [], {}, 1, 5, () => 0, modifiers);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].effects[0]).toMatchObject({
+      type: 'ability-damage-critical-multiplier',
+      abilityId: ability.id,
+    });
+  });
+
+  it('hides manual effect modifiers until the effect is opened and then hides the add-effect card', () => {
+    const config = cloneUpgradeGenerationConfig();
+    config.enabled = false;
+    const ability: AbilityDefinition = {
+      ...fire,
+      id: 'runtime-periodic',
+      allowedUpgradeParameters: ['ability-add-periodic-damage', 'ability-periodic-damage-flat'],
+    };
+    const addPeriodic: UpgradeCardDefinition = {
+      id: 'add-periodic',
+      name: 'Добавить периодический урон',
+      description: '',
+      rarity: 'common',
+      weight: 100,
+      color: '#ff0000',
+      effects: [{
+        type: 'ability-add-periodic-damage',
+        abilityId: ability.id,
+        value: {
+          chancePercent: 25,
+          amount: 4,
+          duration: 2,
+          criticalChancePercent: 0,
+          criticalMultiplier: 1.5,
+          visualColor: '#ff0000',
+          target: { type: 'nearest-enemies', count: 1, areaHeightPercent: 0 },
+        },
+      }],
+    };
+    const boostPeriodic: UpgradeCardDefinition = {
+      id: 'boost-periodic',
+      name: 'Усилить периодический урон',
+      description: '',
+      rarity: 'common',
+      weight: 100,
+      color: '#ff0000',
+      effects: [{ type: 'ability-periodic-damage-flat', abilityId: ability.id, value: 5 }],
+    };
+
+    expect(buildUpgradeChoices(
+      config,
+      [boostPeriodic, addPeriodic],
+      [ability],
+      [],
+      {},
+      2,
+      5,
+      () => 0,
+    )).toEqual([addPeriodic]);
+
+    const modifiers: AbilityRuntimeModifiers = {};
+    addUpgradeEffectToModifiers(modifiers, addPeriodic.effects[0]);
+
+    expect(buildUpgradeChoices(
+      config,
+      [boostPeriodic, addPeriodic],
+      [ability],
+      [],
+      {},
+      2,
+      5,
+      () => 0,
+      modifiers,
+    )).toEqual([boostPeriodic]);
+  });
+
+  it('hides a manual critical multiplier until that ability has critical chance', () => {
+    const config = cloneUpgradeGenerationConfig();
+    config.enabled = false;
+    const ability: AbilityDefinition = {
+      ...fire,
+      id: 'manual-crit',
+      allowedUpgradeParameters: ['ability-damage-critical-multiplier'],
+    };
+    const multiplierCard: UpgradeCardDefinition = {
+      id: 'crit-multiplier',
+      name: 'Множитель крита',
+      description: '',
+      rarity: 'common',
+      weight: 100,
+      color: '#ff0000',
+      effects: [{ type: 'ability-damage-critical-multiplier', abilityId: ability.id, value: 0.5 }],
+    };
+
+    expect(buildUpgradeChoices(
+      config,
+      [multiplierCard],
+      [ability],
+      [],
+      {},
+      1,
+      5,
+      () => 0,
+    )).toEqual([]);
+
+    const modifiers: AbilityRuntimeModifiers = {};
+    addUpgradeEffectToModifiers(modifiers, {
+      type: 'ability-damage-critical-chance',
+      abilityId: ability.id,
+      value: 20,
+    });
+
+    expect(buildUpgradeChoices(
+      config,
+      [multiplierCard],
+      [ability],
+      [],
+      {},
+      1,
+      5,
+      () => 0,
+      modifiers,
+    )).toEqual([multiplierCard]);
   });
 
   it('keeps manual cards available when automatic generation is disabled', () => {

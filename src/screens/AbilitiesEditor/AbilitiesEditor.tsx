@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { EditorCheckbox, EditorColorInput, EditorFileInput, EditorInput, EditorSelect, EditorTextarea } from '../../components/EditorControls';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
+import { readFileAsDataUrl, toggleArrayValue } from '../../editor/editorUtils';
 import {
   changeAbilityEffectTypes,
   changeAbilityEffectTarget,
@@ -12,7 +13,13 @@ import {
   validateAbility,
 } from '../../editor/abilities/abilityLogic';
 import { loadAbilities, persistAbilities } from '../../editor/abilities/abilityStorage';
-import { UPGRADE_EFFECT_OPTIONS, getGroupedUpgradeEffectOptions } from '../../editor/upgrades/upgradeLogic';
+import {
+  UPGRADE_EFFECT_OPTIONS,
+  getAvailableUpgradeEffectTypes,
+  getGroupedUpgradeEffectOptions,
+  setUpgradeParameterAvailability,
+} from '../../editor/upgrades/upgradeLogic';
+import { loadUpgradeCards, persistUpgradeCards } from '../../editor/upgrades/upgradeStorage';
 import type { UpgradeEffectType } from '../../editor/upgrades/types';
 import type {
   AbilityDefinition,
@@ -96,17 +103,6 @@ function getAbilityGlyph(ability: AbilityDefinition): string {
   return LEGACY_GLYPHS[ability.id] ?? (ability.name.slice(0, 1).toUpperCase() || '•');
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error(`Не удалось прочитать файл «${file.name}».`));
-    reader.onload = () => typeof reader.result === 'string'
-      ? resolve(reader.result)
-      : reject(new Error(`Не удалось прочитать файл «${file.name}».`));
-    reader.readAsDataURL(file);
-  });
-}
-
 export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEditorProps) {
   const damageSources = useMemo(() => loadDamageSources(), []);
   const [abilities, setAbilities] = useState<AbilityDefinition[]>(() => loadAbilities());
@@ -164,9 +160,14 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
   };
 
   const openCreate = () => {
+    const next = createEmptyAbility(damageSources);
+    if (abilities.length > 0) {
+      next.allowedUpgradeParameters = getAvailableUpgradeEffectTypes(abilities);
+    }
+
     setSelectedId(null);
     setEditingId(undefined);
-    setDraft(createEmptyAbility(damageSources));
+    setDraft(next);
     setIsCreating(true);
   };
 
@@ -195,19 +196,13 @@ export function AbilitiesEditor({ onBackToMain, onBackToEditors }: AbilitiesEdit
   };
 
   const handleUpgradeParameterToggle = (parameter: UpgradeEffectType, checked: boolean) => {
-    if (checked) {
-      setDraft((current) => ({
-        ...current,
-        allowedUpgradeParameters: current.allowedUpgradeParameters.includes(parameter)
-          ? current.allowedUpgradeParameters
-          : [...current.allowedUpgradeParameters, parameter],
-      }));
-      return;
-    }
+    const result = setUpgradeParameterAvailability(abilities, loadUpgradeCards(), parameter, checked);
+    updateAbilities(result.abilities);
+    if (!checked) persistUpgradeCards(result.cards);
 
     setDraft((current) => ({
       ...current,
-      allowedUpgradeParameters: current.allowedUpgradeParameters.filter((type) => type !== parameter),
+      allowedUpgradeParameters: toggleArrayValue(current.allowedUpgradeParameters, parameter, checked),
     }));
   };
 

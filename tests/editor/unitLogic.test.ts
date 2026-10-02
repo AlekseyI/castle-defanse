@@ -7,7 +7,7 @@ import {
   saveUnit,
   validateUnit,
 } from '../../src/editor/units/unitLogic';
-import { createEmptyUnitAnimations } from '../../src/editor/units/unitAnimationLogic';
+import { createEmptyUnitAnimationSounds, createEmptyUnitAnimations } from '../../src/editor/units/unitAnimationLogic';
 import type { UnitDefinition } from '../../src/editor/units/types';
 
 const damageSources = [
@@ -26,6 +26,7 @@ const goblin: UnitDefinition = {
   traits: [],
   animationSpeed: 1,
   animations: createEmptyUnitAnimations(),
+  animationSounds: createEmptyUnitAnimationSounds(),
   image: {
     name: 'goblin.png',
     src: 'data:image/png;base64,goblin',
@@ -60,6 +61,9 @@ describe('unitLogic', () => {
         attack: [],
         death: [],
       },
+      animationSounds: {
+        move: { id: ' move-sound ', name: ' move.ogg ', src: 'data:audio/ogg;base64,move' },
+      },
       image: {
         name: ' elite.png ',
         src: 'data:image/png;base64,elite',
@@ -88,6 +92,9 @@ describe('unitLogic', () => {
         move: [{ id: 'move-1', name: 'move.png', src: 'data:image/png;base64,move' }],
         attack: [],
         death: [],
+      },
+      animationSounds: {
+        move: { id: 'move-sound', name: 'move.ogg', src: 'data:audio/ogg;base64,move' },
       },
       image: {
         name: 'elite.png',
@@ -287,7 +294,7 @@ describe('unitLogic', () => {
   });
 
   it('creates, updates and deletes units without changing unrelated records', () => {
-    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, damageSourceId: 'ice', coinsOnDeath: 3, traits: [], animationSpeed: 1, animations: createEmptyUnitAnimations() };
+    const orc: UnitDefinition = { id: 'orc', name: 'Орк', hp: 160, speed: 30, damage: 18, damageSourceId: 'ice', coinsOnDeath: 3, traits: [], animationSpeed: 1, animations: createEmptyUnitAnimations(), animationSounds: createEmptyUnitAnimationSounds() };
     const created = saveUnit([goblin], orc);
     const updated = saveUnit(created, { ...goblin, hp: 120 }, 'goblin');
     const deleted = deleteUnit(updated, 'orc');

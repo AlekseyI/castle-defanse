@@ -11,19 +11,20 @@ import { getAllowedTargets } from '../../editor/abilities/abilityLogic';
 import { loadAbilities } from '../../editor/abilities/abilityStorage';
 import type { AbilityEffectType, AbilityTargetType } from '../../editor/abilities/types';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
+import { parseEditorNumber, readFileAsDataUrl, toggleArrayValue } from '../../editor/editorUtils';
 import {
   UPGRADE_EFFECT_OPTIONS,
   calculateUpgradeCardChancePercent,
   changeUpgradeTargetType,
-  cloneUpgradeCard,
+  cloneUpgradeCardWithAllowedParameters,
   createEmptyUpgradeCard,
   createEmptyUpgradeEffect,
   deleteUpgradeCard,
-  getCompatibleUpgradeEffectTypes,
+  getAllowedUpgradeEffectTypes,
   getGroupedUpgradeEffectOptions,
   getDefaultUpgradeEffectValue,
   getUpgradeEffectOption,
-  getGeneratableUpgradeEffectTypes,
+  getAvailableUpgradeEffectTypes,
   saveUpgradeCard,
   validateUpgradeCard,
 } from '../../editor/upgrades/upgradeLogic';
@@ -129,26 +130,9 @@ const ADD_RANGE_FIELDS: Record<UpgradeAddEffectType, AddRangeKey[]> = {
   'ability-add-heal': ['amount'],
 };
 
-function numericValue(value: string, fallback = 0): number {
-  if (value.trim() === '') return fallback;
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function rarityChance(config: UpgradeGenerationConfig, rarity: UpgradeRarity): number {
   const total = RARITIES.reduce((sum, item) => sum + Math.max(0, config.rarityWeights[item]), 0);
   return total > 0 ? (Math.max(0, config.rarityWeights[rarity]) / total) * 100 : 0;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error(`Не удалось прочитать файл «${file.name}».`));
-    reader.onload = () => typeof reader.result === 'string'
-      ? resolve(reader.result)
-      : reject(new Error(`Не удалось прочитать файл «${file.name}».`));
-    reader.readAsDataURL(file);
-  });
 }
 
 function formatPreviewEffect(effect: UpgradeEffect): string {
@@ -180,8 +164,10 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   );
   const [selectedId, setSelectedId] = useState<string | null>(() => sortedCards[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | undefined>(() => sortedCards[0]?.id);
-  const [draft, setDraft] = useState<UpgradeCardDefinition>(() => cloneUpgradeCard(
-    sortedCards[0] ?? createEmptyUpgradeCard(abilities),
+  const [draft, setDraft] = useState<UpgradeCardDefinition>(() => (
+    sortedCards[0]
+      ? cloneUpgradeCardWithAllowedParameters(sortedCards[0], abilities)
+      : createEmptyUpgradeCard(abilities)
   ));
   const [isCreating, setIsCreating] = useState(sortedCards.length === 0);
 
@@ -198,7 +184,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   );
 
   const availableGenerationParameterTypes = useMemo(
-    () => getGeneratableUpgradeEffectTypes(abilities),
+    () => getAvailableUpgradeEffectTypes(abilities),
     [abilities],
   );
   const availableGenerationParameterTypeSet = useMemo(
@@ -221,7 +207,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   const selectCard = (card: UpgradeCardDefinition) => {
     setSelectedId(card.id);
     setEditingId(card.id);
-    setDraft(cloneUpgradeCard(card));
+    setDraft(cloneUpgradeCardWithAllowedParameters(card, abilities));
     setIsCreating(false);
   };
 
@@ -236,7 +222,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const next = sortedCards[0] ?? null;
     setSelectedId(next?.id ?? null);
     setEditingId(next?.id);
-    setDraft(cloneUpgradeCard(next ?? createEmptyUpgradeCard(abilities)));
+    setDraft(next
+      ? cloneUpgradeCardWithAllowedParameters(next, abilities)
+      : createEmptyUpgradeCard(abilities));
     setIsCreating(!next);
   };
 
@@ -259,7 +247,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const fallback = next[0] ?? null;
     setSelectedId(fallback?.id ?? null);
     setEditingId(fallback?.id);
-    setDraft(cloneUpgradeCard(fallback ?? createEmptyUpgradeCard(abilities)));
+    setDraft(fallback
+      ? cloneUpgradeCardWithAllowedParameters(fallback, abilities)
+      : createEmptyUpgradeCard(abilities));
     setIsCreating(!fallback);
   };
 
@@ -285,10 +275,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   const changeEffectAbility = (index: number, abilityId: string) => {
     const ability = abilities.find((item) => item.id === abilityId);
     if (!ability) return;
+    const compatible = getAllowedUpgradeEffectTypes(ability);
+    if (compatible.length === 0) return;
+
     patchEffect(index, (effect) => {
-      const compatible = getCompatibleUpgradeEffectTypes(ability);
       const type = compatible.includes(effect.type) ? effect.type : compatible[0];
-      if (!type) return { ...effect, abilityId };
       return {
         type,
         abilityId,
@@ -309,7 +300,9 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
   };
 
   const addManualEffect = () => {
-    setDraft((current) => ({ ...current, effects: [...current.effects, createEmptyUpgradeEffect(abilities)] }));
+    const effect = createEmptyUpgradeEffect(abilities);
+    if (!effect) return;
+    setDraft((current) => ({ ...current, effects: [...current.effects, effect] }));
   };
 
   const removeManualEffect = (index: number) => {
@@ -341,7 +334,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             min="1"
             step="1"
             value={target.count}
-            onChange={(event) => onChange({ ...target, count: Math.max(1, Math.floor(numericValue(event.target.value, 1))) })}
+            onChange={(event) => onChange({ ...target, count: Math.max(1, Math.floor(parseEditorNumber(event.target.value, 1))) })}
           />
         </label>
       )}
@@ -353,7 +346,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             min="1"
             max="100"
             value={target.areaHeightPercent}
-            onChange={(event) => onChange({ ...target, areaHeightPercent: numericValue(event.target.value) })}
+            onChange={(event) => onChange({ ...target, areaHeightPercent: parseEditorNumber(event.target.value) })}
           />
         </label>
       )}
@@ -374,7 +367,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             value={effect.value as number}
             onChange={(event) => patchEffect(index, (current) => ({
               ...current,
-              value: numericValue(event.target.value),
+              value: parseEditorNumber(event.target.value),
             } as UpgradeEffect))}
           />
         </label>
@@ -427,10 +420,10 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       const added = value as UpgradeAddedDamageValue;
       return (
         <div className={styles.addedEffectGrid}>
-          <label className={styles.field}><span>Урон</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: numericValue(event.target.value) })} /></label>
+          <label className={styles.field}><span>Урон</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: parseEditorNumber(event.target.value) })} /></label>
           <label className={styles.field}><span>Источник урона</span><EditorSelect value={added.damageSourceId} onChange={(event) => setAddedValue({ ...added, damageSourceId: event.target.value })}><option value="">Выберите источник</option>{damageSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}</EditorSelect></label>
-          <label className={styles.field}><span>Шанс крита, %</span><EditorInput type="number" step="any" value={added.criticalChancePercent} onChange={(event) => setAddedValue({ ...added, criticalChancePercent: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Множитель крита</span><EditorInput type="number" step="any" value={added.criticalMultiplier} onChange={(event) => setAddedValue({ ...added, criticalMultiplier: numericValue(event.target.value) })} /></label>
+          <label className={styles.field}><span>Шанс крита, %</span><EditorInput type="number" step="any" value={added.criticalChancePercent} onChange={(event) => setAddedValue({ ...added, criticalChancePercent: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Множитель крита</span><EditorInput type="number" step="any" value={added.criticalMultiplier} onChange={(event) => setAddedValue({ ...added, criticalMultiplier: parseEditorNumber(event.target.value) })} /></label>
           {targetEditor}
         </div>
       );
@@ -440,11 +433,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       const added = value as UpgradeAddedPeriodicDamageValue;
       return (
         <div className={styles.addedEffectGrid}>
-          <label className={styles.field}><span>Шанс, %</span><EditorInput type="number" step="any" value={added.chancePercent} onChange={(event) => setAddedValue({ ...added, chancePercent: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Урон</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Длительность, сек.</span><EditorInput type="number" step="any" value={added.duration} onChange={(event) => setAddedValue({ ...added, duration: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Шанс крита, %</span><EditorInput type="number" step="any" value={added.criticalChancePercent} onChange={(event) => setAddedValue({ ...added, criticalChancePercent: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Множитель крита</span><EditorInput type="number" step="any" value={added.criticalMultiplier} onChange={(event) => setAddedValue({ ...added, criticalMultiplier: numericValue(event.target.value) })} /></label>
+          <label className={styles.field}><span>Шанс, %</span><EditorInput type="number" step="any" value={added.chancePercent} onChange={(event) => setAddedValue({ ...added, chancePercent: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Урон</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Длительность, сек.</span><EditorInput type="number" step="any" value={added.duration} onChange={(event) => setAddedValue({ ...added, duration: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Шанс крита, %</span><EditorInput type="number" step="any" value={added.criticalChancePercent} onChange={(event) => setAddedValue({ ...added, criticalChancePercent: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Множитель крита</span><EditorInput type="number" step="any" value={added.criticalMultiplier} onChange={(event) => setAddedValue({ ...added, criticalMultiplier: parseEditorNumber(event.target.value) })} /></label>
           <label className={styles.field}><span>Цвет</span><EditorColorInput value={added.visualColor} onChange={(event) => setAddedValue({ ...added, visualColor: event.target.value })} /></label>
           {targetEditor}
         </div>
@@ -455,8 +448,8 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       const added = value as UpgradeAddedSlowValue;
       return (
         <div className={styles.addedEffectGrid}>
-          <label className={styles.field}><span>Замедление, %</span><EditorInput type="number" step="any" value={added.slowPercent} onChange={(event) => setAddedValue({ ...added, slowPercent: numericValue(event.target.value) })} /></label>
-          <label className={styles.field}><span>Длительность, сек.</span><EditorInput type="number" step="any" value={added.duration} onChange={(event) => setAddedValue({ ...added, duration: numericValue(event.target.value) })} /></label>
+          <label className={styles.field}><span>Замедление, %</span><EditorInput type="number" step="any" value={added.slowPercent} onChange={(event) => setAddedValue({ ...added, slowPercent: parseEditorNumber(event.target.value) })} /></label>
+          <label className={styles.field}><span>Длительность, сек.</span><EditorInput type="number" step="any" value={added.duration} onChange={(event) => setAddedValue({ ...added, duration: parseEditorNumber(event.target.value) })} /></label>
           {targetEditor}
         </div>
       );
@@ -465,7 +458,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     const added = value as UpgradeAddedHealValue;
     return (
       <div className={styles.addedEffectGrid}>
-        <label className={styles.field}><span>Лечение</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: numericValue(event.target.value) })} /></label>
+        <label className={styles.field}><span>Лечение</span><EditorInput type="number" step="any" value={added.amount} onChange={(event) => setAddedValue({ ...added, amount: parseEditorNumber(event.target.value) })} /></label>
         {targetEditor}
       </div>
     );
@@ -503,9 +496,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     patchConfig((next) => {
       const rule = next.parameters[type];
       if (rule.kind !== 'option') return;
-      rule.values = checked
-        ? Array.from(new Set([...rule.values, value]))
-        : rule.values.filter((item) => item !== value);
+      rule.values = toggleArrayValue(rule.values, value, checked);
     });
   };
 
@@ -513,9 +504,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
     patchConfig((next) => {
       const rule = next.parameters[type];
       if (rule.kind !== 'add-effect') return;
-      rule.settings.targetTypes = checked
-        ? Array.from(new Set([...rule.settings.targetTypes, value]))
-        : rule.settings.targetTypes.filter((item) => item !== value);
+      rule.settings.targetTypes = toggleArrayValue(rule.settings.targetTypes, value, checked);
     });
   };
 
@@ -524,9 +513,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
       const rule = next.parameters[type];
       if (rule.kind !== 'add-effect') return;
       const current = rule.settings.damageSourceIds ?? [];
-      rule.settings.damageSourceIds = checked
-        ? Array.from(new Set([...current, value]))
-        : current.filter((item) => item !== value);
+      rule.settings.damageSourceIds = toggleArrayValue(current, value, checked);
     });
   };
 
@@ -551,20 +538,20 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                 type="number"
                 step="any"
                 value={range.min}
-                onChange={(event) => setRangeValue(type, rarity, 'min', numericValue(event.target.value), addField)}
+                onChange={(event) => setRangeValue(type, rarity, 'min', parseEditorNumber(event.target.value), addField)}
               />
               <EditorInput
                 type="number"
                 step="any"
                 value={range.max}
-                onChange={(event) => setRangeValue(type, rarity, 'max', numericValue(event.target.value), addField)}
+                onChange={(event) => setRangeValue(type, rarity, 'max', parseEditorNumber(event.target.value), addField)}
               />
               <EditorInput
                 type="number"
                 min="0.000001"
                 step="any"
                 value={range.step}
-                onChange={(event) => setRangeValue(type, rarity, 'step', Math.max(0.000001, numericValue(event.target.value, 1)), addField)}
+                onChange={(event) => setRangeValue(type, rarity, 'step', Math.max(0.000001, parseEditorNumber(event.target.value, 1)), addField)}
               />
             </div>
           );
@@ -771,7 +758,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
             </label>
             <label className={styles.field}>
               <span>Вес</span>
-              <EditorInput type="number" min="0.000001" step="any" value={draft.weight} onChange={(event) => setDraft((current) => ({ ...current, weight: numericValue(event.target.value) }))} />
+              <EditorInput type="number" min="0.000001" step="any" value={draft.weight} onChange={(event) => setDraft((current) => ({ ...current, weight: parseEditorNumber(event.target.value) }))} />
               {validation.errors.weight && <small className={styles.fieldError}>{validation.errors.weight}</small>}
             </label>
             <label className={styles.field}>
@@ -808,7 +795,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           <div className={styles.manualEffects}>
             {draft.effects.map((effect, index) => {
               const ability = abilities.find((item) => item.id === effect.abilityId);
-              const compatibleTypes = getCompatibleUpgradeEffectTypes(ability);
+              const compatibleTypes = getAllowedUpgradeEffectTypes(ability);
               const compatibleGroups = getGroupedUpgradeEffectOptions(compatibleTypes);
               const effectOption = getUpgradeEffectOption(effect.type);
               return (
@@ -884,11 +871,11 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
           </label>
           <label className={styles.field}>
             <span>Количество карточек в предпросмотре</span>
-            <EditorInput type="number" min="1" max="50" value={config.previewCardCount} onChange={(event) => patchConfig((next) => { next.previewCardCount = Math.min(50, Math.max(1, Math.floor(numericValue(event.target.value, 1)))); })} />
+            <EditorInput type="number" min="1" max="50" value={config.previewCardCount} onChange={(event) => patchConfig((next) => { next.previewCardCount = Math.min(50, Math.max(1, Math.floor(parseEditorNumber(event.target.value, 1)))); })} />
           </label>
           <label className={styles.field}>
             <span>Максимум параметров одного эффекта</span>
-            <EditorInput type="number" min="1" max="10" step="1" value={config.maxParametersPerEffect} onChange={(event) => patchConfig((next) => { next.maxParametersPerEffect = Math.min(10, Math.max(1, Math.floor(numericValue(event.target.value, 1)))); })} />
+            <EditorInput type="number" min="1" max="10" step="1" value={config.maxParametersPerEffect} onChange={(event) => patchConfig((next) => { next.maxParametersPerEffect = Math.min(10, Math.max(1, Math.floor(parseEditorNumber(event.target.value, 1)))); })} />
             <small>Например, при значении 2 в одной карточке будет не больше двух параметров замедления, урона, периодического урона или лечения.</small>
           </label>
         </div>
@@ -912,13 +899,13 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                 </div>
                 <label className={styles.field}>
                   <span>Вес редкости</span>
-                  <EditorInput type="number" min="0" step="1" value={config.rarityWeights[rarity]} onChange={(event) => patchConfig((next) => { next.rarityWeights[rarity] = Math.max(0, numericValue(event.target.value)); })} />
+                  <EditorInput type="number" min="0" step="1" value={config.rarityWeights[rarity]} onChange={(event) => patchConfig((next) => { next.rarityWeights[rarity] = Math.max(0, parseEditorNumber(event.target.value)); })} />
                 </label>
                 <div className={styles.countRange}>
                   <label className={styles.field}>
                     <span>Минимум параметров</span>
                     <EditorInput type="number" min="1" max="10" step="1" value={countRange.min} onChange={(event) => patchConfig((next) => {
-                      const value = Math.min(10, Math.max(1, Math.floor(numericValue(event.target.value, 1))));
+                      const value = Math.min(10, Math.max(1, Math.floor(parseEditorNumber(event.target.value, 1))));
                       next.parametersPerCard[rarity].min = value;
                       if (next.parametersPerCard[rarity].max < value) next.parametersPerCard[rarity].max = value;
                     })} />
@@ -927,7 +914,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                     <span>Максимум параметров</span>
                     <EditorInput type="number" min={countRange.min} max="10" step="1" value={countRange.max} onChange={(event) => patchConfig((next) => {
                       const min = next.parametersPerCard[rarity].min;
-                      next.parametersPerCard[rarity].max = Math.min(10, Math.max(min, Math.floor(numericValue(event.target.value, min))));
+                      next.parametersPerCard[rarity].max = Math.min(10, Math.max(min, Math.floor(parseEditorNumber(event.target.value, min))));
                     })} />
                   </label>
                 </div>
@@ -966,7 +953,7 @@ export function UpgradesEditor({ onBackToMain, onBackToEditors }: Props) {
                       </span>
                       <label className={styles.weightField} onClick={(event) => event.stopPropagation()}>
                         <span>Вес</span>
-                        <EditorInput type="number" min="0" value={rule.weight} onChange={(event) => patchConfig((next) => { next.parameters[option.type].weight = Math.max(0, numericValue(event.target.value)); })} />
+                        <EditorInput type="number" min="0" value={rule.weight} onChange={(event) => patchConfig((next) => { next.parameters[option.type].weight = Math.max(0, parseEditorNumber(event.target.value)); })} />
                       </label>
                     </summary>
                     <div className={styles.parameterBody}>

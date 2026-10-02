@@ -21,6 +21,9 @@ const DEFAULT_AOE_HEIGHT_PERCENT = 50;
 const DEFAULT_COLOR = '#64748b';
 const DEFAULT_CRITICAL_MULTIPLIER = 1.5;
 const VISUAL_EFFECTS = new Set<AbilityVisualEffect>(['none', 'fire', 'ice', 'lightning', 'heal']);
+const DEFAULT_ALLOWED_UPGRADE_PARAMETERS = UPGRADE_CARD_EFFECT_TYPES.filter(
+  (type) => !type.startsWith('ability-add-'),
+);
 
 const EFFECT_TARGETS: Record<AbilityEffectType, AbilityTargetType[]> = {
   damage: ['nearest-enemies', 'random-enemies', 'area-enemies', 'all-enemies', 'castle'],
@@ -105,7 +108,7 @@ export function createEmptyAbility(damageSources: DamageSource[]): AbilityDefini
     id: '',
     name: '',
     effects: [defaultEffect('damage', damageSources)],
-    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    allowedUpgradeParameters: [...DEFAULT_ALLOWED_UPGRADE_PARAMETERS],
     visualEffect: 'none',
     color: DEFAULT_COLOR,
   };

@@ -3,7 +3,6 @@ import type { AbilityDefinition, AbilityEffectType, AbilityTargetType } from '..
 import type { DamageSource } from '../../editor/damageSources/types';
 import {
   getUpgradeEffectOption,
-  isUpgradeEffectTypeGeneratableForAbility,
   validateUpgradeCard,
 } from '../../editor/upgrades/upgradeLogic';
 import type {
@@ -20,6 +19,7 @@ import type {
   UpgradeParameterGenerationRule,
   UpgradeRarity,
 } from '../../editor/upgrades/types';
+import { applyAbilityRuntimeModifier, type AbilityRuntimeModifiers } from './upgradeCalculator';
 
 const RARITIES: UpgradeRarity[] = ['common', 'rare', 'epic', 'legendary'];
 const RARITY_LABELS: Record<UpgradeRarity, string> = {
@@ -273,8 +273,110 @@ function pickRangeValue(range: UpgradeNumberRange, random: () => number, allowZe
   return value;
 }
 
+const CRITICAL_CHANCE_TYPES: Partial<Record<UpgradeEffectType, UpgradeEffectType>> = {
+  'ability-damage-critical-multiplier': 'ability-damage-critical-chance',
+  'ability-periodic-critical-multiplier': 'ability-periodic-critical-chance',
+};
+
 function abilitySupportsParameter(ability: AbilityDefinition, type: UpgradeEffectType): boolean {
-  return isUpgradeEffectTypeGeneratableForAbility(ability, type);
+  if (!ability.allowedUpgradeParameters.includes(type)) return false;
+  const option = getUpgradeEffectOption(type);
+  if (!option) return false;
+
+  const hasEffect = ability.effects.some((effect) => effect.type === option.abilityEffectType);
+  return option.valueKind === 'add-effect' ? !hasEffect : hasEffect;
+}
+
+function withRuntimeModifiers(
+  abilities: AbilityDefinition[],
+  abilityModifiers: AbilityRuntimeModifiers,
+): AbilityDefinition[] {
+  return abilities.map((ability) => applyAbilityRuntimeModifier(ability, abilityModifiers[ability.id]));
+}
+
+function hasActiveCriticalChance(ability: AbilityDefinition, multiplierType: UpgradeEffectType): boolean {
+  const option = getUpgradeEffectOption(multiplierType);
+  if (!option) return false;
+
+  return ability.effects.some((effect) => (
+    effect.type === option.abilityEffectType &&
+    (effect.type === 'damage' || effect.type === 'periodic-damage') &&
+    effect.criticalChancePercent > 0
+  ));
+}
+
+function projectedCriticalChanceIsActive(
+  ability: AbilityDefinition,
+  card: UpgradeCardDefinition,
+  multiplierType: UpgradeEffectType,
+): boolean {
+  const chanceType = CRITICAL_CHANCE_TYPES[multiplierType];
+  const option = getUpgradeEffectOption(multiplierType);
+  if (!chanceType || !option) return true;
+
+  const chances = ability.effects
+    .filter((effect) => effect.type === option.abilityEffectType)
+    .map((effect) => (effect.type === 'damage' || effect.type === 'periodic-damage' ? effect.criticalChancePercent : 0));
+
+  for (const effect of card.effects) {
+    if (effect.abilityId !== ability.id) continue;
+    const effectOption = getUpgradeEffectOption(effect.type);
+    if (effectOption?.valueKind !== 'add-effect' || effectOption.abilityEffectType !== option.abilityEffectType) continue;
+    if (typeof effect.value !== 'object' || !('criticalChancePercent' in effect.value)) continue;
+    chances.push(effect.value.criticalChancePercent);
+  }
+
+  const bonus = card.effects.reduce((sum, effect) => (
+    effect.abilityId === ability.id && effect.type === chanceType && typeof effect.value === 'number'
+      ? sum + effect.value
+      : sum
+  ), 0);
+
+  return chances.some((chance) => Math.min(100, Math.max(0, chance + bonus)) > 0);
+}
+
+function cardAddsEffect(
+  card: UpgradeCardDefinition,
+  abilityId: string,
+  abilityEffectType: AbilityEffectType,
+): boolean {
+  return card.effects.some((effect) => {
+    if (effect.abilityId !== abilityId) return false;
+    const option = getUpgradeEffectOption(effect.type);
+    return option?.valueKind === 'add-effect' && option.abilityEffectType === abilityEffectType;
+  });
+}
+
+function effectHasRuntimePrerequisite(
+  effect: UpgradeEffect,
+  ability: AbilityDefinition,
+  card: UpgradeCardDefinition,
+): boolean {
+  if (!ability.allowedUpgradeParameters.includes(effect.type)) return false;
+  const option = getUpgradeEffectOption(effect.type);
+  if (!option) return false;
+
+  const hasEffect = ability.effects.some((current) => current.type === option.abilityEffectType);
+  if (option.valueKind === 'add-effect') return !hasEffect;
+  if (!hasEffect && !cardAddsEffect(card, ability.id, option.abilityEffectType)) return false;
+
+  if (CRITICAL_CHANCE_TYPES[effect.type]) {
+    return projectedCriticalChanceIsActive(ability, card, effect.type);
+  }
+
+  return true;
+}
+
+function cardHasRuntimeBenefit(card: UpgradeCardDefinition, abilities: AbilityDefinition[]): boolean {
+  const abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
+  return card.effects.some((effect) => {
+    const ability = abilitiesById.get(effect.abilityId);
+    return Boolean(ability && effectHasRuntimePrerequisite(effect, ability, card));
+  });
+}
+
+function generatedCardEffectsAreApplicable(card: UpgradeCardDefinition, ability: AbilityDefinition): boolean {
+  return card.effects.every((effect) => effectHasRuntimePrerequisite(effect, ability, card));
 }
 
 function getOptionValues(candidate: Candidate, damageSources: DamageSource[]): string[] {
@@ -498,6 +600,13 @@ function buildCandidates(config: UpgradeGenerationConfig, abilities: AbilityDefi
   for (const ability of abilities) {
     for (const [type, rule] of Object.entries(config.parameters) as [UpgradeEffectType, UpgradeParameterGenerationRule][]) {
       if (!rule.enabled || rule.weight <= 0 || !abilitySupportsParameter(ability, type)) continue;
+
+      const criticalChanceType = CRITICAL_CHANCE_TYPES[type];
+      if (criticalChanceType && !hasActiveCriticalChance(ability, type)) {
+        const chanceRule = config.parameters[criticalChanceType];
+        if (!chanceRule.enabled || chanceRule.weight <= 0 || !abilitySupportsParameter(ability, criticalChanceType)) continue;
+      }
+
       candidates.push({ ability, type, rule });
     }
   }
@@ -651,6 +760,7 @@ function createGeneratedCard(
     };
 
     if (!validateUpgradeCard(card, [], [ability], undefined, damageSources).valid) continue;
+    if (!generatedCardEffectsAreApplicable(card, ability)) continue;
     return { card, candidates: chosen };
   }
 
@@ -665,12 +775,14 @@ export function generateUpgradeChoices(
   cardCount: number,
   maxCardReceives: number,
   random: () => number = Math.random,
+  abilityModifiers: AbilityRuntimeModifiers = {},
 ): UpgradeCardDefinition[] {
   if (!config.enabled) return [];
   const targetCount = Math.max(0, Math.floor(cardCount));
   if (targetCount === 0) return [];
 
-  const candidates = buildCandidates(config, abilities);
+  const currentAbilities = withRuntimeModifiers(abilities, abilityModifiers);
+  const candidates = buildCandidates(config, currentAbilities);
   if (candidates.length === 0) return [];
 
   const selectedAcrossCards: Candidate[] = [];
@@ -733,7 +845,9 @@ function manualCardIsAvailable(
 ): boolean {
   const receiveKey = card.receiveKey ?? card.id;
   if ((counts[receiveKey] ?? 0) >= maxCardReceives) return false;
-  return validateUpgradeCard(card, manualCards, abilities, card.id, damageSources).valid;
+  if (!validateUpgradeCard(card, manualCards, abilities, card.id, damageSources).valid) return false;
+
+  return cardHasRuntimeBenefit(card, abilities);
 }
 
 export function buildUpgradeChoices(
@@ -745,10 +859,12 @@ export function buildUpgradeChoices(
   cardCount: number,
   maxCardReceives: number,
   random: () => number = Math.random,
+  abilityModifiers: AbilityRuntimeModifiers = {},
 ): UpgradeCardDefinition[] {
   const targetCount = Math.max(0, Math.floor(cardCount));
   if (targetCount === 0) return [];
 
+  const currentAbilities = withRuntimeModifiers(abilities, abilityModifiers);
   const generated = generateUpgradeChoices(
     config,
     abilities,
@@ -757,11 +873,12 @@ export function buildUpgradeChoices(
     targetCount,
     maxCardReceives,
     random,
+    abilityModifiers,
   );
   const manual = manualCards.filter((card) => manualCardIsAvailable(
     card,
     manualCards,
-    abilities,
+    currentAbilities,
     damageSources,
     counts,
     maxCardReceives,

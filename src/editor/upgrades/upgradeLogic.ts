@@ -1,6 +1,7 @@
 import { getAllowedTargets } from '../abilities/abilityLogic';
 import type { AbilityDefinition, AbilityEffectType, AbilityTargetType } from '../abilities/types';
 import type { DamageSource } from '../damageSources/types';
+import { toggleArrayValue } from '../editorUtils';
 import type {
   UpgradeAddEffectType,
   UpgradeAddEffectValue,
@@ -111,11 +112,39 @@ export function isUpgradeEffectTypeAllowedForAbility(
   return Boolean(ability?.allowedUpgradeParameters.includes(type));
 }
 
-export function getCompatibleUpgradeEffectTypes(ability?: AbilityDefinition): UpgradeEffectType[] {
+const UPGRADE_EFFECT_OPTION_TYPES = UPGRADE_EFFECT_OPTIONS.map((option) => option.type);
+
+export function getAllowedUpgradeEffectTypes(ability?: AbilityDefinition): UpgradeEffectType[] {
   if (!ability) return [];
-  return UPGRADE_EFFECT_OPTIONS
-    .map((option) => option.type)
-    .filter((type) => isUpgradeEffectTypeAllowedForAbility(ability, type));
+  const allowed = new Set(ability.allowedUpgradeParameters);
+  return UPGRADE_EFFECT_OPTION_TYPES.filter((type) => allowed.has(type));
+}
+
+export function getAvailableUpgradeEffectTypes(abilities: AbilityDefinition[]): UpgradeEffectType[] {
+  const allowed = new Set(abilities.flatMap((ability) => ability.allowedUpgradeParameters));
+  return UPGRADE_EFFECT_OPTION_TYPES.filter((type) => allowed.has(type));
+}
+
+export function setUpgradeParameterAvailability(
+  abilities: AbilityDefinition[],
+  cards: UpgradeCardDefinition[],
+  type: UpgradeEffectType,
+  allowed: boolean,
+): { abilities: AbilityDefinition[]; cards: UpgradeCardDefinition[] } {
+  const nextAbilities = abilities.map((ability) => ({
+    ...ability,
+    allowedUpgradeParameters: toggleArrayValue(ability.allowedUpgradeParameters, type, allowed),
+  }));
+
+  if (allowed) return { abilities: nextAbilities, cards };
+
+  const nextCards = cards.flatMap((card) => {
+    const effects = card.effects.filter((effect) => effect.type !== type);
+    if (effects.length === 0) return [];
+    return effects.length === card.effects.length ? [card] : [{ ...card, effects }];
+  });
+
+  return { abilities: nextAbilities, cards: nextCards };
 }
 
 export function isUpgradeEffectTypeGeneratableForAbility(
@@ -126,12 +155,6 @@ export function isUpgradeEffectTypeGeneratableForAbility(
   const option = getUpgradeEffectOption(type);
   if (!option) return false;
   return option.valueKind === 'add-effect' || Boolean(getAbilityEffect(ability, option.abilityEffectType));
-}
-
-export function getGeneratableUpgradeEffectTypes(abilities: AbilityDefinition[]): UpgradeEffectType[] {
-  return UPGRADE_EFFECT_OPTIONS
-    .map((option) => option.type)
-    .filter((type) => abilities.some((ability) => isUpgradeEffectTypeGeneratableForAbility(ability, type)));
 }
 
 export function isUpgradeEffectCompatible(effect: UpgradeEffect, ability?: AbilityDefinition): boolean {
@@ -261,9 +284,39 @@ export function cloneUpgradeCard(card: UpgradeCardDefinition): UpgradeCardDefini
   };
 }
 
+export function cloneUpgradeCardWithAllowedParameters(
+  card: UpgradeCardDefinition,
+  abilities: AbilityDefinition[],
+): UpgradeCardDefinition {
+  const abilitiesById = new Map(abilities.map((ability) => [ability.id, ability]));
+  const cloned = cloneUpgradeCard(card);
+
+  return {
+    ...cloned,
+    effects: cloned.effects.filter((effect) => {
+      const ability = abilitiesById.get(effect.abilityId);
+      return !ability || isUpgradeEffectTypeAllowedForAbility(ability, effect.type);
+    }),
+  };
+}
+
+export function createEmptyUpgradeEffect(abilities: AbilityDefinition[] = []): UpgradeEffect | undefined {
+  for (const ability of abilities) {
+    const type = getAllowedUpgradeEffectTypes(ability)[0];
+    if (!type) continue;
+
+    return {
+      type,
+      abilityId: ability.id,
+      value: getDefaultUpgradeEffectValue(type, ability),
+    } as UpgradeEffect;
+  }
+
+  return undefined;
+}
+
 export function createEmptyUpgradeCard(abilities: AbilityDefinition[] = []): UpgradeCardDefinition {
-  const ability = abilities[0];
-  const type = getCompatibleUpgradeEffectTypes(ability)[0] ?? 'ability-add-damage';
+  const effect = createEmptyUpgradeEffect(abilities);
 
   return {
     id: '',
@@ -271,19 +324,9 @@ export function createEmptyUpgradeCard(abilities: AbilityDefinition[] = []): Upg
     description: '',
     rarity: 'common',
     weight: 100,
-    effects: [{ type, abilityId: ability?.id ?? '', value: getDefaultUpgradeEffectValue(type, ability) } as UpgradeEffect],
+    effects: effect ? [effect] : [],
     color: '#64748b',
   };
-}
-
-export function createEmptyUpgradeEffect(abilities: AbilityDefinition[] = []): UpgradeEffect {
-  const ability = abilities[0];
-  const type = getCompatibleUpgradeEffectTypes(ability)[0] ?? 'ability-add-damage';
-  return {
-    type,
-    abilityId: ability?.id ?? '',
-    value: getDefaultUpgradeEffectValue(type, ability),
-  } as UpgradeEffect;
 }
 
 export function normalizeAddedTarget(target: UpgradeAddedTarget): UpgradeAddedTarget {
@@ -529,48 +572,6 @@ function validateEffectValue(
   }
 
   return undefined;
-}
-
-export interface UpgradeParameterRemovalResult {
-  cards: UpgradeCardDefinition[];
-  changedCardCount: number;
-  deletedCardCount: number;
-}
-
-export function removeUpgradeParametersFromCards(
-  cards: UpgradeCardDefinition[],
-  abilityId: string,
-  parameters: UpgradeEffectType[],
-): UpgradeParameterRemovalResult {
-  const disabled = new Set(parameters);
-  if (disabled.size === 0) {
-    return { cards, changedCardCount: 0, deletedCardCount: 0 };
-  }
-
-  const nextCards: UpgradeCardDefinition[] = [];
-  let changedCardCount = 0;
-  let deletedCardCount = 0;
-
-  for (const card of cards) {
-    const effects = card.effects.filter((effect) => (
-      effect.abilityId !== abilityId || !disabled.has(effect.type)
-    ));
-
-    if (effects.length === card.effects.length) {
-      nextCards.push(card);
-      continue;
-    }
-
-    if (effects.length === 0) {
-      deletedCardCount += 1;
-      continue;
-    }
-
-    changedCardCount += 1;
-    nextCards.push({ ...card, effects });
-  }
-
-  return { cards: nextCards, changedCardCount, deletedCardCount };
 }
 
 export function calculateUpgradeCardChancePercent(

@@ -7,15 +7,18 @@ import { DEFAULT_UPGRADES } from '../../src/editor/upgrades/defaultUpgrades';
 import {
   calculateUpgradeCardChancePercent,
   changeAddedTargetType,
-  getCompatibleUpgradeEffectTypes,
+  cloneUpgradeCardWithAllowedParameters,
+  createEmptyUpgradeCard,
+  createEmptyUpgradeEffect,
+  getAllowedUpgradeEffectTypes,
   getDefaultUpgradeEffectValue,
-  getGeneratableUpgradeEffectTypes,
+  getAvailableUpgradeEffectTypes,
   getGroupedUpgradeEffectOptions,
   normalizeUpgradeCard,
-  removeUpgradeParametersFromCards,
+  setUpgradeParameterAvailability,
   validateUpgradeCard,
 } from '../../src/editor/upgrades/upgradeLogic';
-import type { UpgradeCardDefinition } from '../../src/editor/upgrades/types';
+import type { UpgradeCardDefinition, UpgradeEffect } from '../../src/editor/upgrades/types';
 
 const abilities: AbilityDefinition[] = [
   {
@@ -101,10 +104,148 @@ describe('upgradeLogic', () => {
       allowedUpgradeParameters: ['ability-damage-percent', 'ability-add-slow'],
     };
 
-    expect(getCompatibleUpgradeEffectTypes(restrictedAbility)).toEqual([
+    expect(getAllowedUpgradeEffectTypes(restrictedAbility)).toEqual([
       'ability-damage-percent',
       'ability-add-slow',
     ]);
+  });
+
+  it('reflects every ability parameter toggle in compatible upgrade parameters', () => {
+    for (const type of UPGRADE_EFFECT_TYPES) {
+      const enabledAbility: AbilityDefinition = {
+        ...abilities[0],
+        allowedUpgradeParameters: [type],
+      };
+      expect(getAllowedUpgradeEffectTypes(enabledAbility)).toEqual([type]);
+
+      const disabledAbility: AbilityDefinition = {
+        ...abilities[0],
+        allowedUpgradeParameters: UPGRADE_EFFECT_TYPES.filter((parameter) => parameter !== type),
+      };
+      expect(getAllowedUpgradeEffectTypes(disabledAbility)).not.toContain(type);
+    }
+  });
+
+  it('reflects every ability parameter toggle in generator parameters', () => {
+    const allEffectsAbility: AbilityDefinition = {
+      ...abilities[0],
+      effects: [
+        ...abilities[0].effects,
+        { type: 'slow', slowPercent: 25, duration: 2, target: { type: 'all-enemies' } },
+        { type: 'heal', amount: 10, target: { type: 'castle' } },
+      ],
+    };
+
+    for (const type of UPGRADE_EFFECT_TYPES) {
+      expect(getAvailableUpgradeEffectTypes([{
+        ...allEffectsAbility,
+        allowedUpgradeParameters: [type],
+      }])).toContain(type);
+      expect(getAvailableUpgradeEffectTypes([{
+        ...allEffectsAbility,
+        allowedUpgradeParameters: [],
+      }])).not.toContain(type);
+    }
+  });
+
+  it('removes a disabled parameter everywhere and deletes cards left without parameters', () => {
+    const parameter = 'ability-add-damage' as const;
+    const cards: UpgradeCardDefinition[] = [
+      {
+        ...card,
+        id: 'only-disabled-parameter',
+        effects: [{
+          type: parameter,
+          abilityId: 'fire',
+          value: getDefaultUpgradeEffectValue(parameter, abilities[0]),
+        } as UpgradeEffect],
+      },
+      {
+        ...card,
+        id: 'mixed-parameters',
+        effects: [
+          {
+            type: parameter,
+            abilityId: 'bolt',
+            value: getDefaultUpgradeEffectValue(parameter, abilities[1]),
+          } as UpgradeEffect,
+          { type: 'ability-damage-percent', abilityId: 'fire', value: 20 },
+        ],
+      },
+      {
+        ...card,
+        id: 'unrelated',
+        effects: [{ type: 'ability-heal-flat', abilityId: 'fire', value: 5 }],
+      },
+    ];
+
+    const result = setUpgradeParameterAvailability(abilities, cards, parameter, false);
+
+    expect(result.abilities.every((ability) => !ability.allowedUpgradeParameters.includes(parameter))).toBe(true);
+    expect(getAllowedUpgradeEffectTypes(result.abilities[0])).not.toContain(parameter);
+    expect(getAvailableUpgradeEffectTypes(result.abilities)).not.toContain(parameter);
+    expect(result.cards.map((item) => item.id)).toEqual(['mixed-parameters', 'unrelated']);
+    expect(result.cards.find((item) => item.id === 'mixed-parameters')?.effects).toEqual([
+      { type: 'ability-damage-percent', abilityId: 'fire', value: 20 },
+    ]);
+    expect(result.cards.flatMap((item) => item.effects).some((effect) => effect.type === parameter)).toBe(false);
+  });
+
+  it('enables a parameter for every ability without recreating deleted cards', () => {
+    const parameter = 'ability-add-damage' as const;
+    const disabledAbilities = abilities.map((ability) => ({
+      ...ability,
+      allowedUpgradeParameters: ability.allowedUpgradeParameters.filter((type) => type !== parameter),
+    }));
+    const cards = [{ ...card, effects: [{ type: 'ability-damage-percent', abilityId: 'fire', value: 20 } as UpgradeEffect] }];
+
+    const result = setUpgradeParameterAvailability(disabledAbilities, cards, parameter, true);
+
+    expect(result.abilities.every((ability) => ability.allowedUpgradeParameters.includes(parameter))).toBe(true);
+    expect(getAvailableUpgradeEffectTypes(result.abilities)).toContain(parameter);
+    expect(result.cards).toBe(cards);
+  });
+
+  it('hides disallowed saved effects in the editor draft without changing the saved card', () => {
+    const effects = UPGRADE_EFFECT_TYPES.map((type) => ({
+      type,
+      abilityId: 'fire',
+      value: getDefaultUpgradeEffectValue(type, abilities[0]),
+    } as UpgradeEffect));
+    const savedCard: UpgradeCardDefinition = { ...card, effects };
+    const restrictedAbility: AbilityDefinition = {
+      ...abilities[0],
+      allowedUpgradeParameters: ['ability-add-slow'],
+    };
+
+    const draftCard = cloneUpgradeCardWithAllowedParameters(savedCard, [restrictedAbility, abilities[1]]);
+
+    expect(draftCard.effects.map((effect) => effect.type)).toEqual(['ability-add-slow']);
+    expect(savedCard.effects).toHaveLength(UPGRADE_EFFECT_TYPES.length);
+  });
+
+  it('does not create a fallback parameter when abilities allow no upgrade parameters', () => {
+    const disabledAbilities = abilities.map((ability) => ({
+      ...ability,
+      allowedUpgradeParameters: [],
+    }));
+
+    expect(createEmptyUpgradeEffect(disabledAbilities)).toBeUndefined();
+    expect(createEmptyUpgradeCard(disabledAbilities).effects).toEqual([]);
+  });
+
+  it('uses the first ability that actually has an allowed upgrade parameter', () => {
+    const availableType = 'ability-add-slow' as const;
+    const configuredAbilities: AbilityDefinition[] = [
+      { ...abilities[0], allowedUpgradeParameters: [] },
+      { ...abilities[1], allowedUpgradeParameters: [availableType] },
+    ];
+
+    expect(createEmptyUpgradeEffect(configuredAbilities)).toEqual({
+      type: availableType,
+      abilityId: abilities[1].id,
+      value: getDefaultUpgradeEffectValue(availableType, abilities[1]),
+    });
   });
 
   it('groups upgrade parameters by their ability effect', () => {
@@ -153,7 +294,7 @@ describe('upgradeLogic', () => {
       )),
     }));
 
-    const visibleTypes = getGeneratableUpgradeEffectTypes(withoutTargetTypes);
+    const visibleTypes = getAvailableUpgradeEffectTypes(withoutTargetTypes);
 
     expect(visibleTypes).not.toContain('ability-damage-target-type');
     expect(visibleTypes).not.toContain('ability-periodic-target-type');
@@ -161,19 +302,13 @@ describe('upgradeLogic', () => {
     expect(visibleTypes).toContain('ability-damage-percent');
   });
 
-  it('hides a parameter when it is allowed only on abilities that cannot generate it', () => {
-    const slowAbility: AbilityDefinition = {
-      id: 'ice',
-      name: 'Лёд',
-      effects: [{ type: 'slow', slowPercent: 30, duration: 3, target: { type: 'all-enemies' } }],
-      allowedUpgradeParameters: [],
-      visualEffect: 'ice',
-      color: '#00aaff',
+  it('shows a checked parameter in generation rules even without a matching current ability effect', () => {
+    const damageOnlyAbility: AbilityDefinition = {
+      ...abilities[1],
+      allowedUpgradeParameters: ['ability-slow-duration-flat'],
     };
 
-    const visibleTypes = getGeneratableUpgradeEffectTypes([slowAbility, ...abilities]);
-
-    expect(visibleTypes).not.toContain('ability-slow-duration-flat');
+    expect(getAvailableUpgradeEffectTypes([damageOnlyAbility])).toEqual(['ability-slow-duration-flat']);
   });
 
   it('keeps a parameter visible in the generator editor when at least one ability allows it', () => {
@@ -185,7 +320,7 @@ describe('upgradeLogic', () => {
         : ability.allowedUpgradeParameters.filter((type) => type !== targetType),
     }));
 
-    expect(getGeneratableUpgradeEffectTypes(mixedAbilities)).toContain(targetType);
+    expect(getAvailableUpgradeEffectTypes(mixedAbilities)).toContain(targetType);
   });
 
   it('rejects a parameter that is not allowed for the selected ability', () => {
@@ -202,31 +337,6 @@ describe('upgradeLogic', () => {
     expect(result.errors['effect.0.type']).toBeTruthy();
   });
 
-  it('removes disabled parameters from cards and deletes cards left without effects', () => {
-    const result = removeUpgradeParametersFromCards([
-      card,
-      {
-        ...card,
-        id: 'only_crit',
-        effects: [{ type: 'ability-damage-critical-chance', abilityId: 'fire', value: 5 }],
-      },
-      {
-        ...card,
-        id: 'mixed',
-        effects: [
-          { type: 'ability-damage-critical-chance', abilityId: 'fire', value: 5 },
-          { type: 'ability-damage-percent', abilityId: 'bolt', value: 10 },
-        ],
-      },
-    ], 'fire', ['ability-damage-critical-chance']);
-
-    expect(result.changedCardCount).toBe(1);
-    expect(result.deletedCardCount).toBe(1);
-    expect(result.cards.map((item) => item.id)).toEqual(['hellfire', 'mixed']);
-    expect(result.cards[1].effects).toEqual([
-      { type: 'ability-damage-percent', abilityId: 'bolt', value: 10 },
-    ]);
-  });
 
   it('calculates informational chance from the current card weight and total pool weight', () => {
     const cards: UpgradeCardDefinition[] = [
@@ -340,7 +450,7 @@ describe('upgradeLogic', () => {
   });
 
   it('allows target type modifiers only when enabled in the ability settings', () => {
-    expect(getCompatibleUpgradeEffectTypes(abilities[0])).toContain('ability-damage-target-type');
+    expect(getAllowedUpgradeEffectTypes(abilities[0])).toContain('ability-damage-target-type');
 
     const enabledResult = validateUpgradeCard({
       ...card,
@@ -358,7 +468,7 @@ describe('upgradeLogic', () => {
         (type) => type !== 'ability-damage-target-type',
       ),
     };
-    expect(getCompatibleUpgradeEffectTypes(restrictedAbility)).not.toContain('ability-damage-target-type');
+    expect(getAllowedUpgradeEffectTypes(restrictedAbility)).not.toContain('ability-damage-target-type');
 
     const disabledResult = validateUpgradeCard({
       ...card,
@@ -470,8 +580,19 @@ describe('upgradeLogic', () => {
     expect(new Set(DEFAULT_UPGRADES.map((item) => item.rarity))).toEqual(new Set(['common', 'rare', 'epic', 'legendary']));
     expect(new Set(DEFAULT_UPGRADES.map((item) => item.weight)).size).toBeGreaterThan(4);
 
+    const abilitiesWithAllUpgradeParameters = DEFAULT_ABILITIES.map((ability) => ({
+      ...ability,
+      allowedUpgradeParameters: [...UPGRADE_EFFECT_TYPES],
+    }));
+
     for (const sample of DEFAULT_UPGRADES) {
-      const result = validateUpgradeCard(sample, DEFAULT_UPGRADES, DEFAULT_ABILITIES, sample.id, DEFAULT_DAMAGE_SOURCES);
+      const result = validateUpgradeCard(
+        sample,
+        DEFAULT_UPGRADES,
+        abilitiesWithAllUpgradeParameters,
+        sample.id,
+        DEFAULT_DAMAGE_SOURCES,
+      );
       expect(result.errors).toEqual({});
     }
   });

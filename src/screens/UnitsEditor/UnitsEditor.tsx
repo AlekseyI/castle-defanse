@@ -3,7 +3,12 @@ import { EditorFileInput, EditorInput, EditorMultiSelect, EditorSelect } from '.
 import { applyUnitTraitMultipliers, deleteUnit, hasTrait, normalizeUnit, saveUnit, validateUnit } from '../../editor/units/unitLogic';
 import { loadDamageSources } from '../../editor/damageSources/damageSourceStorage';
 import { loadUnits, persistUnits } from '../../editor/units/unitStorage';
-import { cloneUnitAnimations, createEmptyUnitAnimations } from '../../editor/units/unitAnimationLogic';
+import {
+  cloneUnitAnimationSounds,
+  cloneUnitAnimations,
+  createEmptyUnitAnimationSounds,
+  createEmptyUnitAnimations,
+} from '../../editor/units/unitAnimationLogic';
 import type { UnitDefinition, UnitTrait, UnitTraitMultipliers } from '../../editor/units/types';
 import { UnitAnimationEditor } from './UnitAnimationEditor';
 import styles from './UnitsEditor.module.css';
@@ -21,6 +26,7 @@ const EMPTY_UNIT: UnitDefinition = {
   damageProtection: {},
   animationSpeed: 1,
   animations: createEmptyUnitAnimations(),
+  animationSounds: createEmptyUnitAnimationSounds(),
 };
 
 
@@ -79,6 +85,7 @@ function cloneUnit(unit: UnitDefinition): UnitDefinition {
     damageProtection: unit.damageProtection ? { ...unit.damageProtection } : {},
     image: unit.image ? { ...unit.image } : undefined,
     animations: cloneUnitAnimations(unit.animations),
+    animationSounds: cloneUnitAnimationSounds(unit.animationSounds),
   };
 }
 
@@ -105,6 +112,19 @@ function isSameAnimations(
       const rightFrame = rightFrames[index];
       return frame.id === rightFrame?.id && frame.name === rightFrame.name && frame.src === rightFrame.src;
     });
+  });
+}
+
+function isSameAnimationSounds(
+  left: UnitDefinition['animationSounds'],
+  right: UnitDefinition['animationSounds'],
+): boolean {
+  return (['move', 'attack', 'death'] as const).every((type) => {
+    const leftSound = left?.[type];
+    const rightSound = right?.[type];
+    return leftSound?.id === rightSound?.id
+      && leftSound?.name === rightSound?.name
+      && leftSound?.src === rightSound?.src;
   });
 }
 
@@ -209,7 +229,8 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
       && current.image?.name === normalized.image?.name
       && current.image?.src === normalized.image?.src
       && current.animationSpeed === normalized.animationSpeed
-      && isSameAnimations(current.animations, normalized.animations);
+      && isSameAnimations(current.animations, normalized.animations)
+      && isSameAnimationSounds(current.animationSounds, normalized.animationSounds);
 
     if (isUnchanged) return;
 
@@ -615,10 +636,12 @@ export function UnitsEditor({ onBackToMain, onBackToEditors }: UnitsEditorProps)
             <UnitAnimationEditor
               animationSpeed={draft.animationSpeed}
               animations={draft.animations}
-              onChange={({ animationSpeed, animations }) => setDraft((current) => ({
+              animationSounds={draft.animationSounds ?? createEmptyUnitAnimationSounds()}
+              onChange={({ animationSpeed, animations, animationSounds }) => setDraft((current) => ({
                 ...current,
                 animationSpeed,
                 animations,
+                animationSounds,
               }))}
             />
 

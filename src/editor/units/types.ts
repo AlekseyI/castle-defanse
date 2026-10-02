@@ -14,6 +14,14 @@ export interface UnitAnimationFrame {
 
 export type UnitAnimations = Record<UnitAnimationType, UnitAnimationFrame[]>;
 
+export interface UnitAnimationSound {
+  id: string;
+  name: string;
+  src: string;
+}
+
+export type UnitAnimationSounds = Partial<Record<UnitAnimationType, UnitAnimationSound>>;
+
 export type DamageProtection = Record<string, number>;
 
 export const UNIT_TRAITS = [
@@ -52,6 +60,7 @@ export interface UnitDefinition {
   image?: UnitImage;
   animationSpeed: number;
   animations: UnitAnimations;
+  animationSounds: UnitAnimationSounds;
   /** Stable internal reference used by game waves. It is not editable in the unit editor. */
   gameKey?: string;
 }

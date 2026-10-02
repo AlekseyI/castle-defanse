@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MapDefinition } from '../../src/editor/maps/types';
-import { createEmptyUnitAnimations } from '../../src/editor/units/unitAnimationLogic';
+import { createEmptyUnitAnimationSounds, createEmptyUnitAnimations } from '../../src/editor/units/unitAnimationLogic';
 import type { UnitDefinition } from '../../src/editor/units/types';
 import {
   getRuntimeSpawnBlock,
@@ -171,6 +171,7 @@ describe('waveLogic', () => {
       traits: ['boss'],
       animationSpeed: 1,
       animations: createEmptyUnitAnimations(),
+      animationSounds: createEmptyUnitAnimationSounds(),
     };
     const runtime = getRuntimeUnit(unit, map.endless, 2);
 
@@ -194,6 +195,7 @@ describe('waveLogic', () => {
       attackStartPathPercent: 60,
       animationSpeed: 1,
       animations: createEmptyUnitAnimations(),
+      animationSounds: createEmptyUnitAnimationSounds(),
     };
 
     const runtime = getRuntimeUnit(unit, map.endless, 1);
@@ -213,6 +215,7 @@ describe('waveLogic', () => {
       traits: ['healthy', 'strong', 'fast', 'generous'],
       animationSpeed: 1,
       animations: createEmptyUnitAnimations(),
+      animationSounds: createEmptyUnitAnimationSounds(),
       traitMultipliers: {
         hp: 2,
         damage: 1.5,
@@ -242,6 +245,7 @@ describe('waveLogic', () => {
       traits: ['armored'],
       animationSpeed: 1,
       animations: createEmptyUnitAnimations(),
+      animationSounds: createEmptyUnitAnimationSounds(),
       traitMultipliers: { protection: 2 },
       damageProtection: {
         fire: 40,

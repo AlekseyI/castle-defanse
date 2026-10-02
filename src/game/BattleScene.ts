@@ -31,6 +31,7 @@ import {
 } from './upgrades/upgradeRewardLogic';
 import { SpellEffects } from './effects/SpellEffects';
 import { PeriodicDamageAura } from './effects/PeriodicDamageAura';
+import { RangedProjectile } from './effects/RangedProjectile';
 import { advanceCastleAttack, formatDamagePopup, resolveDamageHit } from './damageLogic';
 import {
   advanceAreaEffect,
@@ -117,6 +118,7 @@ export class BattleScene extends Container {
   private readonly app: Application;
   private readonly battlefield = new Container();
   private readonly enemiesLayer = new Container();
+  private readonly projectileLayer = new Container();
   private readonly spellEffects = new SpellEffects();
   private readonly noticeLayer = new Container();
   private readonly bg = new Graphics();
@@ -129,6 +131,7 @@ export class BattleScene extends Container {
   private readonly activeAreaEffects: ActiveBattleAreaEffect[] = [];
   private readonly activePeriodicDamages: ActiveBattlePeriodicDamage[] = [];
   private readonly activeDamagePopups: ActiveDamagePopup[] = [];
+  private readonly activeRangedProjectiles: RangedProjectile[] = [];
   private readonly stateUnsubscribe: () => void;
   private readonly unitsById: Map<string, UnitDefinition>;
   private readonly map: MapDefinition;
@@ -168,7 +171,7 @@ export class BattleScene extends Container {
     this.manualUpgradeCards = loadUpgradeCards();
 
     this.addChild(this.bg, this.battlefield, this.noticeLayer);
-    this.battlefield.addChild(this.enemiesLayer, this.castle, this.spellEffects);
+    this.battlefield.addChild(this.enemiesLayer, this.castle, this.projectileLayer, this.spellEffects);
 
     useGameStore.getState().reset(
       this.map.endless.enabled ? 0 : this.map.waves.length,
@@ -207,6 +210,7 @@ export class BattleScene extends Container {
     }
 
     this.spellEffects.update(dt);
+    this.updateRangedProjectiles(dt);
     this.updateDamagePopups(dt);
     this.updateDyingEnemies(dt);
 
@@ -311,6 +315,8 @@ export class BattleScene extends Container {
         state.upgradeCounts,
         effectiveReward.cardCount,
         this.map.upgradeSettings.maxCardReceives,
+        Math.random,
+        state.abilityModifiers,
       );
       if (choices.length > 0) {
         this.pendingWaveAdvance = true;
@@ -344,6 +350,8 @@ export class BattleScene extends Container {
       state.upgradeCounts,
       state.upgradeChoices.length,
       state.upgradeMaxCardReceives,
+      Math.random,
+      state.abilityModifiers,
     );
     if (choices.length > 0) state.openUpgradeSelection(choices);
   }
@@ -523,9 +531,37 @@ export class BattleScene extends Container {
       const attack = advanceCastleAttack(enemy.nextCastleAttackIn, dt, 1, speedMultiplier);
       enemy.nextCastleAttackIn = attack.nextAttackIn;
       for (let attackIndex = 0; attackIndex < attack.attacks; attackIndex += 1) {
+        if (hasTrait(enemy, 'ranged')) this.fireRangedProjectile(enemy);
         useGameStore.getState().damageCastle(enemy.damage, enemy.damageSourceId);
       }
     }
+  }
+
+  private fireRangedProjectile(enemy: Enemy) {
+    const damageSource = this.damageSources.find((source) => source.id === enemy.damageSourceId);
+    const projectile = new RangedProjectile(
+      { x: enemy.root.x, y: enemy.root.y + enemy.radius * 0.45 },
+      { x: this.app.screen.width / 2, y: this.castleY - 30 },
+      damageSource?.color,
+    );
+    this.projectileLayer.addChild(projectile);
+    this.activeRangedProjectiles.push(projectile);
+  }
+
+  private updateRangedProjectiles(dt: number) {
+    for (let i = this.activeRangedProjectiles.length - 1; i >= 0; i -= 1) {
+      const projectile = this.activeRangedProjectiles[i];
+      projectile.update(dt);
+      if (!projectile.done) continue;
+
+      this.activeRangedProjectiles.splice(i, 1);
+      projectile.destroy({ children: true });
+    }
+  }
+
+  private clearRangedProjectiles() {
+    for (const projectile of this.activeRangedProjectiles) projectile.destroy({ children: true });
+    this.activeRangedProjectiles.length = 0;
   }
 
   private damageEnemy(
@@ -1073,6 +1109,7 @@ export class BattleScene extends Container {
     this.activePeriodicDamages.length = 0;
     for (const popup of this.activeDamagePopups) popup.text.destroy();
     this.activeDamagePopups.length = 0;
+    this.clearRangedProjectiles();
     this.spellEffects.clearEffects();
 
     this.waveIndex = 0;

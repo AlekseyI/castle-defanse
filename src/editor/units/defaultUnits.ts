@@ -1,4 +1,4 @@
-import { createEmptyUnitAnimations } from './unitAnimationLogic';
+import { createEmptyUnitAnimationSounds, createEmptyUnitAnimations } from './unitAnimationLogic';
 import type { UnitDefinition } from './types';
 
 export const DEFAULT_UNITS: UnitDefinition[] = [
@@ -14,6 +14,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: [],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
   {
     id: 'wave_1_boss',
@@ -27,6 +28,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: ['boss'],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
   {
     id: 'wave_2_enemy',
@@ -40,6 +42,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: [],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
   {
     id: 'wave_2_boss',
@@ -53,6 +56,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: ['boss'],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
   {
     id: 'wave_3_enemy',
@@ -66,6 +70,7 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: [],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
   {
     id: 'wave_3_boss',
@@ -79,5 +84,6 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
     traits: ['boss'],
     animationSpeed: 1,
     animations: createEmptyUnitAnimations(),
+    animationSounds: createEmptyUnitAnimationSounds(),
   },
 ];

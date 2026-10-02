@@ -1,6 +1,7 @@
 import {
   UNIT_ANIMATION_TYPES,
   type UnitAnimationFrame,
+  type UnitAnimationSounds,
   type UnitAnimations,
   type UnitAnimationType,
 } from './types';
@@ -10,6 +11,26 @@ export const UNIT_ANIMATION_LABELS: Record<UnitAnimationType, string> = {
   attack: 'Атака',
   death: 'Смерть',
 };
+
+
+export function createEmptyUnitAnimationSounds(): UnitAnimationSounds {
+  return {};
+}
+
+export function cloneUnitAnimationSounds(sounds?: UnitAnimationSounds): UnitAnimationSounds {
+  return Object.fromEntries(
+    UNIT_ANIMATION_TYPES.flatMap((type) => sounds?.[type] ? [[type, { ...sounds[type] }]] : []),
+  ) as UnitAnimationSounds;
+}
+
+export function normalizeUnitAnimationSounds(sounds?: UnitAnimationSounds): UnitAnimationSounds {
+  return Object.fromEntries(
+    UNIT_ANIMATION_TYPES.flatMap((type) => {
+      const sound = sounds?.[type];
+      return sound ? [[type, { id: sound.id.trim(), name: sound.name.trim(), src: sound.src }]] : [];
+    }),
+  ) as UnitAnimationSounds;
+}
 
 export function createEmptyUnitAnimations(): UnitAnimations {
   return {

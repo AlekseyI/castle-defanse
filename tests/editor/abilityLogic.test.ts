@@ -45,10 +45,16 @@ describe('abilityLogic', () => {
         criticalMultiplier: 1.5,
         target: { type: 'nearest-enemies', count: 1 },
       }],
-      allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+      allowedUpgradeParameters: UPGRADE_CARD_EFFECT_TYPES.filter((type) => !type.startsWith('ability-add-')),
       visualEffect: 'none',
       color: '#64748b',
     });
+  });
+
+  it('does not enable add-effect upgrade parameters for a new ability', () => {
+    expect(createEmptyAbility(damageSources).allowedUpgradeParameters.every(
+      (type) => !type.startsWith('ability-add-'),
+    )).toBe(true);
   });
 
   it('adds another effect with its own default target without changing the visual effect', () => {

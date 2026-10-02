@@ -1,10 +1,12 @@
 import { DEFAULT_UNITS } from './defaultUnits';
-import { cloneUnitAnimations } from './unitAnimationLogic';
+import { cloneUnitAnimationSounds, cloneUnitAnimations } from './unitAnimationLogic';
 import {
   UNIT_ANIMATION_TYPES,
   UNIT_TRAITS,
   type DamageProtection,
   type UnitAnimationFrame,
+  type UnitAnimationSound,
+  type UnitAnimationSounds,
   type UnitAnimations,
   type UnitDefinition,
   type UnitImage,
@@ -12,7 +14,7 @@ import {
   type UnitTraitMultipliers,
 } from './types';
 
-const STORAGE_KEY = 'game.units.v11';
+const STORAGE_KEY = 'game.units.v12';
 
 function hasOnlyFields(value: Record<string, unknown>, fields: string[]): boolean {
   return Object.keys(value).every((key) => fields.includes(key));
@@ -49,6 +51,24 @@ function isUnitAnimations(value: unknown): value is UnitAnimations {
   );
 }
 
+function isUnitAnimationSound(value: unknown): value is UnitAnimationSound {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const sound = value as Record<string, unknown>;
+  return (
+    hasOnlyFields(sound, ['id', 'name', 'src']) &&
+    typeof sound.id === 'string' && sound.id.length > 0 &&
+    typeof sound.name === 'string' && sound.name.length > 0 &&
+    typeof sound.src === 'string' && sound.src.length > 0
+  );
+}
+
+function isUnitAnimationSounds(value: unknown): value is UnitAnimationSounds {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const sounds = value as Record<string, unknown>;
+  if (!hasOnlyFields(sounds, [...UNIT_ANIMATION_TYPES])) return false;
+  return Object.values(sounds).every(isUnitAnimationSound);
+}
+
 function isDamageProtection(value: unknown): value is DamageProtection {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 
@@ -83,7 +103,7 @@ function isUnit(value: unknown): value is UnitDefinition {
   if (!value || typeof value !== 'object') return false;
 
   const unit = value as Record<string, unknown>;
-  if (!hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'damageSourceId', 'coinsOnDeath', 'attackStartPathPercent', 'traits', 'traitMultipliers', 'damageProtection', 'image', 'animationSpeed', 'animations', 'gameKey'])) return false;
+  if (!hasOnlyFields(unit, ['id', 'name', 'hp', 'speed', 'damage', 'damageSourceId', 'coinsOnDeath', 'attackStartPathPercent', 'traits', 'traitMultipliers', 'damageProtection', 'image', 'animationSpeed', 'animations', 'animationSounds', 'gameKey'])) return false;
   if (typeof unit.id !== 'string' || typeof unit.name !== 'string') return false;
   if (typeof unit.hp !== 'number' || !Number.isFinite(unit.hp)) return false;
   if (typeof unit.speed !== 'number' || !Number.isFinite(unit.speed)) return false;
@@ -92,6 +112,7 @@ function isUnit(value: unknown): value is UnitDefinition {
   if (typeof unit.coinsOnDeath !== 'number' || !Number.isFinite(unit.coinsOnDeath) || unit.coinsOnDeath < 0) return false;
   if (typeof unit.animationSpeed !== 'number' || !Number.isFinite(unit.animationSpeed) || unit.animationSpeed < 0.1 || unit.animationSpeed > 100) return false;
   if (!isUnitAnimations(unit.animations)) return false;
+  if (!isUnitAnimationSounds(unit.animationSounds)) return false;
   if (!Array.isArray(unit.traits) || !unit.traits.every(isUnitTrait) || new Set(unit.traits).size !== unit.traits.length) return false;
   if (unit.traitMultipliers !== undefined && !isUnitTraitMultipliers(unit.traitMultipliers)) return false;
   if (unit.damageProtection !== undefined && !isDamageProtection(unit.damageProtection)) return false;
@@ -134,6 +155,7 @@ function cloneDefaults(): UnitDefinition[] {
     damageProtection: unit.damageProtection ? { ...unit.damageProtection } : undefined,
     image: unit.image ? { ...unit.image } : undefined,
     animations: cloneUnitAnimations(unit.animations),
+    animationSounds: cloneUnitAnimationSounds(unit.animationSounds),
   }));
 }
 

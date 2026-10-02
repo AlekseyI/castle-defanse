@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cloneUnitAnimationSounds,
+  createEmptyUnitAnimationSounds,
   createEmptyUnitAnimations,
   getUnitAnimationDuration,
   getUnitAnimationFrameDuration,
   getUnitAnimationFrameIndex,
   getUnitAnimationFrames,
+  normalizeUnitAnimationSounds,
   hasUnitAnimationFrames,
 } from '../../src/editor/units/unitAnimationLogic';
 import type { UnitAnimations } from '../../src/editor/units/types';
@@ -14,6 +17,22 @@ function frame(id: string) {
 }
 
 describe('unitAnimationLogic', () => {
+
+  it('creates, clones and normalizes animation sounds by animation type', () => {
+    const empty = createEmptyUnitAnimationSounds();
+    const sounds = {
+      move: { id: ' move-sound ', name: ' move.ogg ', src: 'data:audio/ogg;base64,move' },
+    };
+    const cloned = cloneUnitAnimationSounds(sounds);
+
+    expect(empty).toEqual({});
+    expect(cloned).toEqual(sounds);
+    expect(cloned.move).not.toBe(sounds.move);
+    expect(normalizeUnitAnimationSounds(sounds)).toEqual({
+      move: { id: 'move-sound', name: 'move.ogg', src: 'data:audio/ogg;base64,move' },
+    });
+  });
+
   it('detects whether a unit has any canvas animation frames', () => {
     const empty = createEmptyUnitAnimations();
     const withAttack: UnitAnimations = { ...empty, attack: [frame('attack-1')] };

@@ -19,6 +19,14 @@ afterEach(() => {
 });
 
 describe('abilityStorage', () => {
+  it('does not enable add-effect upgrade parameters in a clean project', () => {
+    installLocalStorage();
+
+    expect(loadAbilities().every((ability) => ability.allowedUpgradeParameters.every(
+      (type) => !type.startsWith('ability-add-'),
+    ))).toBe(true);
+  });
+
   it('loads abilities with independent effect targets and a selected visual effect', () => {
     installLocalStorage();
     const abilities: AbilityDefinition[] = [

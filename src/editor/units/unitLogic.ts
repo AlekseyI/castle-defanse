@@ -5,7 +5,7 @@ import {
   type UnitTrait,
   type UnitTraitMultipliers,
 } from './types';
-import { normalizeUnitAnimations } from './unitAnimationLogic';
+import { normalizeUnitAnimationSounds, normalizeUnitAnimations } from './unitAnimationLogic';
 import type { DamageSource } from '../damageSources/types';
 
 export interface UnitValidationResult {
@@ -99,6 +99,7 @@ export function normalizeUnit(unit: UnitDefinition): UnitDefinition {
     traits,
     animationSpeed: unit.animationSpeed,
     animations: normalizeUnitAnimations(unit.animations),
+    animationSounds: normalizeUnitAnimationSounds(unit.animationSounds),
   };
 
   if (traits.includes('ranged')) {

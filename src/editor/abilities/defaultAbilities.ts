@@ -1,6 +1,10 @@
 import { UPGRADE_CARD_EFFECT_TYPES } from '../upgrades/types';
 import type { AbilityDefinition } from './types';
 
+const DEFAULT_ALLOWED_UPGRADE_PARAMETERS = UPGRADE_CARD_EFFECT_TYPES.filter(
+  (type) => !type.startsWith('ability-add-'),
+);
+
 export const DEFAULT_ABILITIES: AbilityDefinition[] = [
   {
     id: 'fire',
@@ -14,7 +18,7 @@ export const DEFAULT_ABILITIES: AbilityDefinition[] = [
       criticalMultiplier: 1.5,
       target: { type: 'area-enemies', areaHeightPercent: 50 },
     }],
-    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    allowedUpgradeParameters: [...DEFAULT_ALLOWED_UPGRADE_PARAMETERS],
     visualEffect: 'fire',
     color: '#e9573f',
   },
@@ -28,7 +32,7 @@ export const DEFAULT_ABILITIES: AbilityDefinition[] = [
       duration: 4,
       target: { type: 'all-enemies' },
     }],
-    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    allowedUpgradeParameters: [...DEFAULT_ALLOWED_UPGRADE_PARAMETERS],
     visualEffect: 'ice',
     color: '#4ba3ff',
   },
@@ -44,7 +48,7 @@ export const DEFAULT_ABILITIES: AbilityDefinition[] = [
       criticalMultiplier: 1.5,
       target: { type: 'random-enemies', count: 3 },
     }],
-    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    allowedUpgradeParameters: [...DEFAULT_ALLOWED_UPGRADE_PARAMETERS],
     visualEffect: 'lightning',
     color: '#f7c948',
   },
@@ -57,7 +61,7 @@ export const DEFAULT_ABILITIES: AbilityDefinition[] = [
       amount: 22,
       target: { type: 'castle' },
     }],
-    allowedUpgradeParameters: [...UPGRADE_CARD_EFFECT_TYPES],
+    allowedUpgradeParameters: [...DEFAULT_ALLOWED_UPGRADE_PARAMETERS],
     visualEffect: 'heal',
     color: '#58c985',
   },
